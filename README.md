@@ -1,88 +1,61 @@
-# Server Sync Mod Template
+# RepairRequiresMaterials
 
-Can be used to already have your project set up and ready to go with ServerSync and basic version checking. Please see the [Original Repository](https://github.com/blaxxun-boop/ServerSync) if you have to update, or have further questions this template might not answer.
+RepairRequiresMaterials replaces Valheim's free equipment repair with two synchronized payment paths:
 
-Thank you Blaxxun for ServerSync!
+- While any crafting station is open, the selected item's exact recipe materials take priority. Repair is enabled only when Valheim's vanilla station-eligibility and minimum-level checks pass for that recipe.
+- When no crafting station is open, a biome-matched repair powder is consumed from the player's inventory.
 
-ServerSync
-==========
+Field repair restores and reuses Valheim's vanilla repair button instead of adding a separate powder button. The compact repair panel stays above that button without covering it; only the background uses Jötunn's Valheim-style wood panel texture and border.
 
-Bundling the dll
-----------------
+## Requirements
 
-You need to ensure the dll is available to your mod.
+- BepInExPack Valheim 5.4.2333 or newer
+- Jötunn 2.29.2 or newer
+- AzuCraftyBoxes is optional and applies only to station-material repairs
 
-Including the dll is best done via ILRepack (https://github.com/ravibpatel/ILRepack.Lib.MSBuild.Task). You can load this package (ILRepack.Lib.MSBuild.Task) from NuGet.
+The mod and matching version must be installed on the server and every client.
 
-Then create a file ILRepack.targets in your project folder. File content:
+## Repair powders
+
+All powders are fixed, network-stable clones of `PowderedDragonEgg`. Each craft produces four powders.
+
+| Equipment tier | Ingredient | Station |
+|---|---:|---|
+| Meadows | 4 Resin | Workbench 1 |
+| Black Forest | 1 Bronze | Forge 1 |
+| Swamp | 1 Iron | Forge 2 |
+| Ocean | 1 Chitin | Workbench 2 |
+| Mountain | 2 Obsidian | Forge 3 |
+| Plains | 1 Black Metal | Forge 4 |
+| Mistlands | 1 Refined Eitr | Black Forge 1 |
+| Ashlands | 1 Proustite Powder | Black Forge 3 |
+| Deep North | Registered item; no default recipe yet | — |
+
+With the default `Durability Repaired Per Powder = 25%`, a full repair consumes one to four powders according to the missing durability. The repair itself always restores maximum durability.
+
+## Automatic tier resolution
+
+The built-in ingredient-to-biome map is adapted from ValheimEnchantmentSystem without taking a runtime dependency on it. The resolver scans all enabled recipes for the exact output prefab and uses the highest mapped ingredient tier. If an item has no enabled recipe, its disabled drop/shop recipe is used as a fallback so it can still be repaired. This avoids collisions between mod items that share a localization name and supports alternate recipes.
+
+Server-synchronized overrides are available in the config:
+
+```ini
+Item Biome Overrides = ModSword=AshLands
+Ingredient Biome Overrides = CustomOre=Mistlands
 ```
-<?xml version="1.0" encoding="utf-8"?>
-<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-    <Target Name="ILRepacker" AfterTargets="Build">
-        <ItemGroup>
-            <InputAssemblies Include="$(TargetPath)" />
-            <InputAssemblies Include="$(OutputPath)\ServerSync.dll" />
-        </ItemGroup>
-        <ILRepack Parallel="true" DebugInfo="true" Internalize="true" InputAssemblies="@(InputAssemblies)" OutputFile="$(TargetPath)" TargetKind="SameAsPrimaryAssembly" LibraryPath="$(OutputPath)" />
-    </Target>
-</Project>
-```
 
-Using the ServerSync
---------------------
+Multiple entries can be separated with commas, semicolons, or new lines.
 
-Declare a variable:
+## Main configuration
 
-`ServerSync.ConfigSync configSync = new ServerSync.ConfigSync("my.mod.guid") { DisplayName = "My Mod Name", CurrentVersion = "1.2.3", MinimumRequiredVersion = "1.2.0" };`
+- `Repair Material Percent`: base percentage of recipe materials used at a station.
+- `Enable Field Repair`: enables repair powder use when no crafting station is open.
+- `Durability Repaired Per Powder`: durability coverage represented by one powder.
+- `Use AzuCraftyBoxes Containers`: includes nearby allowed containers for station repairs.
+- `Show Repair Tooltip` and `Show Available Amounts`: panel/tooltip display options.
 
-All of DisplayName, CurrentVersion and MinimumRequiredVersion are optional.
-If CurrentVersion is specified, then the user will see a warning in their BepInEx log if the server version does not match the client version.
-If also MinimumRequiredVersion is specified and the client has an older version than the servers MinimumRequiredVersion, the client will be immediately disconnected and see an error message, explaining why.
-To display a friendly name for your mod in the error messages, specify DisplayName, otherwise the primary identifier will be used.
-Also note that the primary identifier (I propose using the GUID, "my.mod.guid") should never be changed (changing it will break backwards compatibility completely).
+All gameplay and UI settings currently synchronize through ServerSync.
 
-There are two public methods on the ServerSync.ConfigSync class:
+## Build
 
-- `AddConfigEntry<T>(ConfigEntry<T> configEntry)`
-
-  Registers a BepInEx ConfigEntry to be synchronized.
-
-- `AddLockingConfigEntry<T>(ConfigEntry<T> lockingConfig) where T : IConvertible`
-
-  Registers a BepInEx ConfigEntry to be synchronized, whose value determines whether the config is locked. If the value is zero when converted to integer, the config is not locked. Otherwise it is locked.
-  This method must be called at most once. If not called at all, the config will never be locked.
-
-Useful properties:
-
-- `static bool ProcessingServerUpdate`
-
-  The mod is receiving and applying configs from the server. Used internally to avoid config writing loops.
-
-- `bool IsSourceOfTruth`
-
-  Whether the local config is currently being used. False if a remote config is currently applied.
-
-Additionally, there is a class `ServerSync.CustomSyncedValue<T>(ConfigSync, string Identifier, T value = default)` to synchronize arbitrary data (more precisely: all data which Valheims native serialization supports).
-This class registers itself to the passed ConfigSync instance upon instantiation.
-It provides a Value property and a ValueChanged event handler.
-The Identifier must be unique for the given ConfigSync instance.
-
-
-Handy config function
----------------------
-
-To avoid manually adding each config entry to the ConfigSync instance, I propose to add a simple wrapper `config()` (with the same signature as `Config.Bind()`) to your UnityBasePlugin class:
-
-```
-ConfigEntry<T> config<T>(string group, string name, T value, ConfigDescription description, bool synchronizedSetting = true)
-{
-    ConfigEntry<T> configEntry = Config.Bind(group, name, value, description);
-
-    SyncedConfigEntry<T> syncedConfigEntry = configSync.AddConfigEntry(configEntry);
-    syncedConfigEntry.SynchronizedConfig = synchronizedSetting;
-
-    return configEntry;
-}
-
-ConfigEntry<T> config<T>(string group, string name, T value, string description, bool synchronizedSetting = true) => config(group, name, value, new ConfigDescription(description), synchronizedSetting);
-```
+The project targets .NET Framework 4.8. `ServerSync.dll` is merged into the output; Jötunn remains an external hard dependency and is not merged.

@@ -1,2 +1,2 @@
-# Ready to use english translation file for the plugin
-# (for more information on LocalizationManager, see the LocalizationManager documentation https://github.com/blaxxun-boop/LocalizationManager#example-project).
+# Runtime translations are registered programmatically through Jötunn in
+# RepairPowderRegistry.cs. This file remains embedded for project compatibility.

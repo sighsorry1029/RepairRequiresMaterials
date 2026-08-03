@@ -1,35 +1,51 @@
 ﻿using System;
 using System.IO;
-using System.Linq;
 using System.Reflection;
-using System.Timers;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
-using JetBrains.Annotations;
 using ServerSync;
-using UnityEngine;
 
-namespace ServerSyncModTemplate;
+namespace RepairRequiresMaterials;
 
-[BepInPlugin(ModGUID, ModName, ModVersion)]
-public class ServerSyncModTemplatePlugin : BaseUnityPlugin
+[BepInPlugin(ModGuid, ModName, ModVersion)]
+[BepInDependency(Jotunn.Main.ModGuid, Jotunn.Main.Version)]
+[BepInDependency(AzuCraftyBoxesCompat.PluginGuid, BepInDependency.DependencyFlags.SoftDependency)]
+public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
 {
-    internal const string ModName = "ServerSyncModTemplate";
-    internal const string ModVersion = "1.0.0";
-    internal const string Author = "{Azumatt}";
-    private const string ModGUID = $"{Author}.{ModName}";
-    private static string ConfigFileName = $"{ModGUID}.cfg";
-    private static string ConfigFileFullPath = Paths.ConfigPath + Path.DirectorySeparatorChar + ConfigFileName;
-    internal static string ConnectionError = "";
-    private readonly Harmony _harmony = new(ModGUID);
-    public static readonly ManualLogSource ServerSyncModTemplateLogger = BepInEx.Logging.Logger.CreateLogSource(ModName);
-    private static readonly ConfigSync ConfigSync = new(ModGUID) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = ModVersion };
-    private FileSystemWatcher _watcher;
+    internal const string ModName = "RepairRequiresMaterials";
+    internal const string ModVersion = "0.1.0";
+    internal const string Author = "sighsorry";
+    internal const string ModGuid = $"{Author}.{ModName}";
+
+    private static readonly string ConfigFileName = $"{ModGuid}.cfg";
+    private static readonly string ConfigFileFullPath = Path.Combine(Paths.ConfigPath, ConfigFileName);
+    private static readonly ConfigSync ConfigSync = new(ModGuid)
+    {
+        DisplayName = ModName,
+        CurrentVersion = ModVersion,
+        MinimumRequiredVersion = ModVersion
+    };
+
+    private readonly Harmony _harmony = new(ModGuid);
     private readonly object _reloadLock = new();
+    private FileSystemWatcher? _watcher;
     private DateTime _lastConfigReloadTime;
-    private const long RELOAD_DELAY = 10000000; // One second
+
+    internal static readonly ManualLogSource Log = BepInEx.Logging.Logger.CreateLogSource(ModName);
+
+    internal static RepairRequiresMaterialsPlugin Instance = null!;
+    internal static string ConnectionError = string.Empty;
+    internal static ConfigEntry<Toggle> ServerConfigLocked = null!;
+    internal static ConfigEntry<float> RepairCostPercent = null!;
+    internal static ConfigEntry<Toggle> EnableFieldRepair = null!;
+    internal static ConfigEntry<float> PowderRepairPercent = null!;
+    internal static ConfigEntry<string> ItemBiomeOverrides = null!;
+    internal static ConfigEntry<string> IngredientBiomeOverrides = null!;
+    internal static ConfigEntry<Toggle> UseAzuCraftyBoxesContainers = null!;
+    internal static ConfigEntry<Toggle> ShowRepairTooltip = null!;
+    internal static ConfigEntry<Toggle> ShowAvailableAmountInTooltip = null!;
 
     public enum Toggle
     {
@@ -39,26 +55,78 @@ public class ServerSyncModTemplatePlugin : BaseUnityPlugin
 
     public void Awake()
     {
+        Instance = this;
+
         bool saveOnSet = Config.SaveOnConfigSet;
         Config.SaveOnConfigSet = false;
 
-        // Uncomment the line below to use the LocalizationManager for localizing your mod.
-        // Make sure to populate the English.yml file in the translation folder with your keys to be localized and the values associated before uncommenting!.
-        //Localizer.Load(); // Use this to initialize the LocalizationManager (for more information on LocalizationManager, see the LocalizationManager documentation https://github.com/blaxxun-boop/LocalizationManager#example-project).
+        ServerConfigLocked = config("1 - General", "Lock Configuration", Toggle.On, "If on, the configuration is locked and can be changed by server admins only.");
+        _ = ConfigSync.AddLockingConfigEntry(ServerConfigLocked);
 
-        _serverConfigLocked = config("1 - General", "Lock Configuration", Toggle.On, "If on, the configuration is locked and can be changed by server admins only.");
-        _ = ConfigSync.AddLockingConfigEntry(_serverConfigLocked);
+        RepairCostPercent = config(
+            "2 - Repair",
+            "Repair Material Percent",
+            50f,
+            new ConfigDescription(
+                "Percent of the recipe material cost used as the base repair cost before the durability bucket multiplier is applied.",
+                new AcceptableValueRange<float>(0f, 100f)));
 
+        EnableFieldRepair = config(
+            "2 - Repair",
+            "Enable Field Repair",
+            Toggle.On,
+            "If on, damaged items can be repaired without a matching usable crafting station by consuming their biome repair powder.");
 
-        Assembly assembly = Assembly.GetExecutingAssembly();
-        _harmony.PatchAll(assembly);
+        PowderRepairPercent = config(
+            "2 - Repair",
+            "Durability Repaired Per Powder",
+            25f,
+            new ConfigDescription(
+                "Percentage of an item's maximum durability covered by one biome repair powder. The repair always restores the item fully and rounds the powder cost up.",
+                new AcceptableValueRange<float>(1f, 100f)));
+
+        ItemBiomeOverrides = config(
+            "2 - Repair",
+            "Item Biome Overrides",
+            string.Empty,
+            "Optional item-prefab overrides in the form ItemPrefab=Biome. Separate multiple entries with commas, semicolons, or new lines.");
+
+        IngredientBiomeOverrides = config(
+            "2 - Repair",
+            "Ingredient Biome Overrides",
+            string.Empty,
+            "Optional ingredient-prefab mappings in the form IngredientPrefab=Biome. Separate multiple entries with commas, semicolons, or new lines.");
+
+        UseAzuCraftyBoxesContainers = config(
+            "2 - Repair",
+            "Use AzuCraftyBoxes Containers",
+            Toggle.On,
+            "If on, nearby containers from AzuCraftyBoxes are counted and consumed for repair costs when that mod is loaded.");
+
+        ShowRepairTooltip = config(
+            "3 - UI",
+            "Show Repair Tooltip",
+            Toggle.On,
+            "If on, hovering the repair hammer shows the next repair target and its required materials.");
+
+        ShowAvailableAmountInTooltip = config(
+            "3 - UI",
+            "Show Available Amounts",
+            Toggle.On,
+            "If on, the repair panel and tooltip show available and required amounts for each material.");
+
+        ReloadTierOverrides();
+        ItemBiomeOverrides.SettingChanged += (_, _) => ReloadTierOverrides();
+        IngredientBiomeOverrides.SettingChanged += (_, _) => ReloadTierOverrides();
+
+        RepairPowderRegistry.InitializeLocalization();
+        RepairPowderRegistry.Initialize();
+
+        _harmony.PatchAll(Assembly.GetExecutingAssembly());
         SetupWatcher();
 
         Config.Save();
-        if (saveOnSet)
-        {
-            Config.SaveOnConfigSet = saveOnSet;
-        }
+        Config.SaveOnConfigSet = saveOnSet;
     }
 
     private void OnDestroy()
@@ -81,8 +149,7 @@ public class ServerSyncModTemplatePlugin : BaseUnityPlugin
     private void ReadConfigValues(object sender, FileSystemEventArgs e)
     {
         DateTime now = DateTime.Now;
-        long time = now.Ticks - _lastConfigReloadTime.Ticks;
-        if (time < RELOAD_DELAY)
+        if (now.Ticks - _lastConfigReloadTime.Ticks < TimeSpan.TicksPerSecond)
         {
             return;
         }
@@ -91,19 +158,17 @@ public class ServerSyncModTemplatePlugin : BaseUnityPlugin
         {
             if (!File.Exists(ConfigFileFullPath))
             {
-                ServerSyncModTemplateLogger.LogWarning("Config file does not exist. Skipping reload.");
+                Log.LogWarning("Config file does not exist. Skipping reload.");
                 return;
             }
 
             try
             {
-                ServerSyncModTemplateLogger.LogDebug("Reloading configuration...");
-                SaveWithRespectToConfigSet(true);
-                ServerSyncModTemplateLogger.LogInfo("Configuration reload complete.");
+                SaveWithRespectToConfigSet(reload: true);
             }
             catch (Exception ex)
             {
-                ServerSyncModTemplateLogger.LogError($"Error reloading configuration: {ex.Message}");
+                Log.LogError($"Error reloading configuration: {ex.Message}");
             }
         }
 
@@ -114,36 +179,25 @@ public class ServerSyncModTemplatePlugin : BaseUnityPlugin
     {
         bool originalSaveOnSet = Config.SaveOnConfigSet;
         Config.SaveOnConfigSet = false;
+
         if (reload)
+        {
             Config.Reload();
-        Config.Save();
-        if (originalSaveOnSet)
-        {
-            Config.SaveOnConfigSet = originalSaveOnSet;
         }
-        
-        // If you want to do something once localization completes, LocalizationManager has a hook for that.
-        /*Localizer.OnLocalizationComplete += () =>
-        {
-            // Do something
-            ItemManagerModTemplateLogger.LogDebug("OnLocalizationComplete called");
-        };*/
+
+        Config.Save();
+        Config.SaveOnConfigSet = originalSaveOnSet;
     }
-
-
-    #region ConfigOptions
-
-    private static ConfigEntry<Toggle> _serverConfigLocked = null!;
 
     private ConfigEntry<T> config<T>(string group, string name, T value, ConfigDescription description, bool synchronizedSetting = true)
     {
-        ConfigDescription extendedDescription = new(description.Description + (synchronizedSetting ? " [Synced with Server]" : " [Not Synced with Server]"), description.AcceptableValues, description.Tags);
+        ConfigDescription extendedDescription = new(
+            description.Description + (synchronizedSetting ? " [Synced with Server]" : " [Not Synced with Server]"),
+            description.AcceptableValues,
+            description.Tags);
+
         ConfigEntry<T> configEntry = Config.Bind(group, name, value, extendedDescription);
-        //var configEntry = Config.Bind(group, name, value, description);
-
-        SyncedConfigEntry<T> syncedConfigEntry = ConfigSync.AddConfigEntry(configEntry);
-        syncedConfigEntry.SynchronizedConfig = synchronizedSetting;
-
+        ConfigSync.AddConfigEntry(configEntry).SynchronizedConfig = synchronizedSetting;
         return configEntry;
     }
 
@@ -152,53 +206,21 @@ public class ServerSyncModTemplatePlugin : BaseUnityPlugin
         return config(group, name, value, new ConfigDescription(description), synchronizedSetting);
     }
 
-    private class ConfigurationManagerAttributes
+    private static void ReloadTierOverrides()
     {
-        [UsedImplicitly] public int? Order = null!;
-        [UsedImplicitly] public bool? Browsable = null!;
-        [UsedImplicitly] public string? Category = null!;
-        [UsedImplicitly] public Action<ConfigEntryBase>? CustomDrawer = null!;
-    }
-
-    class AcceptableShortcuts() : AcceptableValueBase(typeof(KeyboardShortcut))
-    {
-        public override object Clamp(object value) => value;
-        public override bool IsValid(object value) => true;
-
-        public override string ToDescriptionString() => $"# Acceptable values: {string.Join(", ", UnityInput.Current.SupportedKeyCodes)}";
-    }
-
-    #endregion
-}
-
-public static class KeyboardExtensions
-{
-    extension(KeyboardShortcut shortcut)
-    {
-        public bool IsKeyDown()
+        foreach (string warning in RepairTierResolver.ReloadOverrides(
+                     ItemBiomeOverrides.Value,
+                     IngredientBiomeOverrides.Value))
         {
-            return shortcut.MainKey != KeyCode.None && Input.GetKeyDown(shortcut.MainKey) && shortcut.Modifiers.All(Input.GetKey);
-        }
-
-        public bool IsKeyHeld()
-        {
-            return shortcut.MainKey != KeyCode.None && Input.GetKey(shortcut.MainKey) && shortcut.Modifiers.All(Input.GetKey);
+            Log.LogWarning(warning);
         }
     }
 }
 
-public static class ToggleExtentions
+internal static class ToggleExtensions
 {
-    extension(ServerSyncModTemplatePlugin.Toggle value)
+    internal static bool IsOn(this RepairRequiresMaterialsPlugin.Toggle value)
     {
-        public bool IsOn()
-        {
-            return value == ServerSyncModTemplatePlugin.Toggle.On;
-        }
-
-        public bool IsOff()
-        {
-            return value == ServerSyncModTemplatePlugin.Toggle.Off;
-        }
+        return value == RepairRequiresMaterialsPlugin.Toggle.On;
     }
 }
