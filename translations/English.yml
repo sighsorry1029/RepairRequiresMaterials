@@ -1,2 +1,16 @@
-# Runtime translations are registered programmatically through Jötunn in
-# RepairPowderRegistry.cs. This file remains embedded for project compatibility.
+rrm_skill_crafting_heading: "<color=orange>RepairRequiresMaterials</color>"
+rrm_skill_crafting_free_repair: "Material-cost repairs can be free based on Crafting skill ({0}% at level 0, {1}% at level 100)."
+rrm_skill_crafting_bonus_output: "Each eligible stackable output item at a Crafting-skill station rolls independently, reaching {0}% bonus chance at Crafting skill 100."
+rrm_skill_crafting_equip_speed: "Queued equipment equip and manual unequip time is reduced by Crafting skill (maximum {0}% at level 100)."
+
+rrm_ui_free: "FREE"
+
+rrm_dismantle_unavailable: "Item dismantling is unavailable."
+rrm_dismantle_action: "Dismantle eligible items"
+rrm_dismantle_success: "Dismantled {0} item(s)."
+rrm_dismantle_no_equipment: "No dismantlable items are in the incinerator."
+rrm_dismantle_no_room: "The incinerator does not have enough room for the returned materials."
+rrm_dismantle_busy: "The incinerator is busy."
+rrm_dismantle_no_access: "You cannot dismantle items here."
+rrm_dismantle_inventory_changed: "The incinerator contents changed. Dismantling was cancelled."
+rrm_dismantle_failed: "Item dismantling failed."

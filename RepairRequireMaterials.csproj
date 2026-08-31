@@ -12,7 +12,7 @@
         <AssemblyName>RepairRequiresMaterials</AssemblyName>
         <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
         <FileAlignment>512</FileAlignment>
-        <LangVersion>preview</LangVersion>
+        <LangVersion>10.0</LangVersion>
         <Nullable>enable</Nullable>
     </PropertyGroup>
     <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -62,11 +62,6 @@
             </PropertyGroup>
         </When>
     </Choose>
-    <PropertyGroup>
-        <JotunnPath Condition="'$(JotunnPath)' == '' AND Exists('$(APPDATA)\com.kesomannen.gale\cache\ValheimModding-Jotunn\2.29.2\BepInEx\plugins\ValheimModding-Jotunn\Jotunn.dll')">$(APPDATA)\com.kesomannen.gale\cache\ValheimModding-Jotunn\2.29.2\BepInEx\plugins\ValheimModding-Jotunn\Jotunn.dll</JotunnPath>
-        <JotunnPath Condition="'$(JotunnPath)' == '' AND Exists('$(BepInExPath)\plugins\Jotunn.dll')">$(BepInExPath)\plugins\Jotunn.dll</JotunnPath>
-        <JotunnPath Condition="'$(JotunnPath)' == '' AND Exists('$(BepInExPath)\plugins\ValheimModding-Jotunn\Jotunn.dll')">$(BepInExPath)\plugins\ValheimModding-Jotunn\Jotunn.dll</JotunnPath>
-    </PropertyGroup>
     <ItemGroup>
         <Reference Include="0Harmony">
             <HintPath>$(BepInExPath)\core\0Harmony.dll</HintPath>
@@ -83,34 +78,19 @@
         <Reference Include="BepInEx">
             <HintPath>$(BepInExPath)\core\BepInEx.dll</HintPath>
         </Reference>
-        <Reference Include="Jotunn">
-            <HintPath>$(JotunnPath)</HintPath>
-            <Private>False</Private>
-        </Reference>
         <Reference Include="ServerSync">
             <HintPath>Libs\ServerSync.dll</HintPath>
         </Reference>
         <Reference Include="System"/>
         <Reference Include="System.Core"/>
-        <Reference Include="System.Data"/>
-        <Reference Include="System.Xml"/>
         <Reference Include="UnityEngine">
             <HintPath>$(CorlibPath)\UnityEngine.dll</HintPath>
-        </Reference>
-        <Reference Include="UnityEngine.AssetBundleModule">
-            <HintPath>$(CorlibPath)\UnityEngine.AssetBundleModule.dll</HintPath>
         </Reference>
         <Reference Include="UnityEngine.CoreModule">
             <HintPath>$(CorlibPath)\UnityEngine.CoreModule.dll</HintPath>
         </Reference>
-        <Reference Include="UnityEngine.IMGUIModule">
-            <HintPath>$(CorlibPath)\UnityEngine.IMGUIModule.dll</HintPath>
-        </Reference>
         <Reference Include="UnityEngine.InputLegacyModule">
             <HintPath>$(CorlibPath)\UnityEngine.InputLegacyModule.dll</HintPath>
-        </Reference>
-        <Reference Include="UnityEngine.ParticleSystemModule">
-            <HintPath>$(CorlibPath)\UnityEngine.ParticleSystemModule.dll</HintPath>
         </Reference>
         <Reference Include="UnityEngine.TextRenderingModule">
             <HintPath>$(CorlibPath)\UnityEngine.TextRenderingModule.dll</HintPath>
@@ -124,19 +104,34 @@
         <Reference Include="Unity.TextMeshPro">
             <HintPath>$(GamePath)\valheim_Data\Managed\Unity.TextMeshPro.dll</HintPath>
         </Reference>
+        <!-- This project format does not promote PackageReference compile assets
+             into ResolveAssemblyReference, so use the generated package path. -->
+        <Reference Include="YamlDotNet">
+            <HintPath>$(PkgYamlDotNet)\lib\net47\YamlDotNet.dll</HintPath>
+        </Reference>
     </ItemGroup>
     <ItemGroup>
+        <Compile Include="AdminCommands.cs"/>
         <Compile Include="AzuCraftyBoxesCompat.cs"/>
+        <Compile Include="CraftingEquipSpeedPatches.cs"/>
+        <Compile Include="CraftingFreeRepairSystem.cs"/>
+        <Compile Include="CraftingProductionBonusPatches.cs"/>
+        <Compile Include="CraftingSkillTooltipPatches.cs"/>
+        <Compile Include="EquipmentTypeRules.cs"/>
+        <Compile Include="IncineratorDismantleController.cs"/>
+        <Compile Include="IncineratorDismantleCostSystem.cs"/>
+        <Compile Include="IncineratorDismantlePatches.cs"/>
         <Compile Include="Patches.cs"/>
         <Compile Include="Plugin.cs"/>
+        <Compile Include="PrefabPatternMatcher.cs"/>
         <Compile Include="Properties\AssemblyInfo.cs"/>
         <Compile Include="RepairCostSystem.cs"/>
-        <Compile Include="RepairPanel.cs"/>
-        <Compile Include="RepairPowderRegistry.cs"/>
+        <Compile Include="RepairCostRoundingSystem.cs"/>
         <Compile Include="RepairRecipeCatalog.cs"/>
+        <Compile Include="RepairRequiresMaterialsLocalization.cs"/>
+        <Compile Include="RepairSelectionState.cs"/>
         <Compile Include="RepairService.cs"/>
-        <Compile Include="RepairTierResolver.cs"/>
-        <Compile Include="VersionHandshake.cs"/>
+        <Compile Include="RepairStrip.cs"/>
     </ItemGroup>
     <ItemGroup>
         <Content Include=".gitignore"/>
@@ -150,16 +145,18 @@
         <Content Include="Thunderstore\CHANGELOG.md"/>
         <Content Include="Thunderstore\icon.png"/>
         <Content Include="Thunderstore\manifest.json"/>
-        <EmbeddedResource Include="translations\English.yml"/>
+        <Content Include="THIRD-PARTY-NOTICES.txt"/>
         <Content Include="UpdateManifest.ps1"/>
-    </ItemGroup>
-    <ItemGroup>
-        <None Include="App.config"/>
+        <EmbeddedResource Include="translations\English.yml"/>
+        <EmbeddedResource Include="translations\Korean.yml"/>
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.44.1">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="YamlDotNet" Version="16.3.0" GeneratePathProperty="true">
+          <PrivateAssets>all</PrivateAssets>
         </PackageReference>
     </ItemGroup>
     <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets"/>
@@ -170,10 +167,6 @@
     <Target Name="AfterBuild">
     </Target>
     -->
-    <UsingTask AssemblyFile="KeyManager.dll" TaskName="KeyManager.Seal" Condition="'$(AfterTargets)' == 'KeyManager'"/>
-    <Target Name="KeyManager" AfterTargets="ILRepack" Condition="'$(AfterTargets)' == 'KeyManager'">
-        <Seal DLL="$(TargetPath)"/>
-    </Target>
     <Target Name="GetAssemblyVersion" AfterTargets="$(AfterTargets)">
         <GetAssemblyIdentity AssemblyFiles="$(TargetPath)">
             <Output TaskParameter="Assemblies" ItemName="Targets"/>
@@ -200,10 +193,10 @@
         <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFolder="$(CopyOutputDLLPath3)" OverwriteReadOnlyFiles="true" Condition="Exists('$(CopyOutputDLLPath3)')"/>
     </Target>
     <Target Name="CopyReadMeToTSFolder" AfterTargets="CopyOutputDLL" Condition=" ('$(Configuration)|$(Platform)' == 'Release|AnyCPU') And ('$(OS)' == 'Windows_NT') ">
-        <Warning Text="README.md not found in project directory. A default README.md file will be created for the Thunderstore package" Condition="!Exists('README.md')"/>
-        <WriteLinesToFile File="README.md" Lines="Default Readme file from one of Azumatt's Templates. Replace this with actual content." Overwrite="false" Condition="!Exists('README.md')"/>
-        <Copy SourceFiles="README.md" DestinationFolder="$(PackageDir)" OverwriteReadOnlyFiles="true"/>
-        <Copy SourceFiles="README.md" DestinationFolder="$(ProjectDir)\Thunderstore" OverwriteReadOnlyFiles="true"/>
+        <Error Text="README.md not found in project directory." Condition="!Exists('$(ProjectDir)README.md')"/>
+        <RemoveDir Directories="$(PackageDir)" Condition="Exists('$(PackageDir)')"/>
+        <MakeDir Directories="$(PackageDir)"/>
+        <Copy SourceFiles="$(ProjectDir)README.md" DestinationFiles="$(PackageDir)\README.md" OverwriteReadOnlyFiles="true"/>
     </Target>
     <Target Name="UpdateManifestVersion" AfterTargets="CopyReadmeToTSFolder" Condition=" ('$(Configuration)|$(Platform)' == 'Release|AnyCPU') And ('$(OS)' == 'Windows_NT') ">
         <Error Text="manifest.json not found in Thunderstore directory." Condition="!Exists('$(ProjectDir)Thunderstore\manifest.json')"/>
@@ -215,23 +208,30 @@
         <Exec Command="powershell.exe -ExecutionPolicy Bypass -Command &quot;&amp; { &amp; '$(ProjectDir)UpdateManifest.ps1' -manifestFile '@(ManifestFile)' -versionString '$(PackageVersion)' }&quot;"/>
     </Target>
     <Target Name="MakeThunderstorePackage" AfterTargets="UpdateManifestVersion" Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+        <Error Text="DLL not found in target directory." Condition="!Exists('$(TargetDir)$(AssemblyName).dll')"/>
+        <Error Text="README.md not found in package directory." Condition="!Exists('$(PackageDir)\README.md')"/>
+        <Error Text="CHANGELOG.md not found in Thunderstore directory." Condition="!Exists('$(ProjectDir)Thunderstore\CHANGELOG.md')"/>
         <Error Text="manifest.json not found in Thunderstore directory." Condition="!Exists('$(ProjectDir)\Thunderstore\manifest.json')"/>
         <Error Text="icon.png not found in Thunderstore directory. Please note that Thunderstore requires this image to be 256x256 in dimension" Condition="!Exists('$(ProjectDir)\Thunderstore\icon.png')"/>
+        <Error Text="English.yml not found in translations directory." Condition="!Exists('$(ProjectDir)translations\English.yml')"/>
         <ItemGroup>
-            <PackageFiles Include="$(TargetDir)$(AssemblyName).dll" Condition="Exists('$(TargetDir)$(AssemblyName).dll')"/>
-            <PackageFiles Include="$(ProjectDir)\Thunderstore\CHANGELOG.md" Condition="Exists('$(ProjectDir)\Thunderstore\CHANGELOG.md')"/>
-            <PackageFiles Include="$(ProjectDir)\Thunderstore\manifest.json" Condition="Exists('$(ProjectDir)\Thunderstore\manifest.json')"/>
-            <PackageFiles Include="$(ProjectDir)\Thunderstore\icon.png" Condition="Exists('$(ProjectDir)\Thunderstore\icon.png')"/>
+            <PackageFiles Include="$(TargetDir)$(AssemblyName).dll"/>
+            <PackageFiles Include="$(ProjectDir)Thunderstore\CHANGELOG.md"/>
+            <PackageFiles Include="$(ProjectDir)Thunderstore\manifest.json"/>
+            <PackageFiles Include="$(ProjectDir)Thunderstore\icon.png"/>
         </ItemGroup>
         <MakeDir Directories="$(PackageDir)"/>
         <Copy SourceFiles="@(PackageFiles)" DestinationFolder="$(PackageDir)"/>
+        <Copy SourceFiles="$(ProjectDir)translations\English.yml" DestinationFiles="$(PackageDir)\$(AssemblyName).English.yml"/>
         <ZipDirectory SourceDirectory="$(PackageDir)" DestinationFile="Thunderstore\$(PackageName).zip" Overwrite="true"/>
         <RemoveDir Directories="$(PackageDir)"/>
     </Target>
     <Target Name="MakeNexusPackage" AfterTargets="MakeThunderstorePackage" Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+        <Error Text="DLL not found in target directory." Condition="!Exists('$(TargetDir)$(AssemblyName).dll')"/>
         <MakeDir Directories="$(ProjectDir)\Nexus"/>
+        <RemoveDir Directories="$(PackageDir)" Condition="Exists('$(PackageDir)')"/>
         <ItemGroup>
-            <NexusPackageFiles Include="$(TargetDir)$(AssemblyName).dll;"/>
+            <NexusPackageFiles Include="$(TargetDir)$(AssemblyName).dll"/>
         </ItemGroup>
         <MakeDir Directories="$(PackageDir)"/>
         <Copy SourceFiles="@(NexusPackageFiles)" DestinationFolder="$(PackageDir)"/>

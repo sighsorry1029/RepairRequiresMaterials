@@ -10,77 +10,63 @@ internal enum RepairPaymentKind
 {
     Free,
     StationMaterials,
-    FieldPowder
+    CraftingSkillFree
 }
 
 internal sealed class RepairPreview
 {
     internal RepairPreview(
         ItemDrop.ItemData item,
-        Recipe? recipe,
         RepairPaymentKind paymentKind,
         IReadOnlyList<RepairMaterialCost> costs,
-        Piece.Requirement[] consumableRequirements,
         int durabilityBucketPercent,
         bool usesNearbyContainers,
-        bool stationReady = true,
-        RepairBiome? powderBiome = null,
-        string powderPrefabName = "")
+        bool hasRawMaterialCost = false,
+        string repairCostRoundingToken = "",
+        string skillFreeTicketToken = "")
     {
         Item = item;
-        Recipe = recipe;
         PaymentKind = paymentKind;
         Costs = costs;
-        ConsumableRequirements = consumableRequirements;
         DurabilityBucketPercent = durabilityBucketPercent;
         UsesNearbyContainers = usesNearbyContainers;
-        StationReady = stationReady;
-        PowderBiome = powderBiome;
-        PowderPrefabName = powderPrefabName;
+        HasRawMaterialCost = hasRawMaterialCost;
+        RepairCostRoundingToken = repairCostRoundingToken;
+        SkillFreeTicketToken = skillFreeTicketToken;
     }
 
     internal ItemDrop.ItemData Item { get; }
-    internal Recipe? Recipe { get; }
     internal RepairPaymentKind PaymentKind { get; }
     internal IReadOnlyList<RepairMaterialCost> Costs { get; }
-    internal Piece.Requirement[] ConsumableRequirements { get; }
     internal int DurabilityBucketPercent { get; }
     internal bool UsesNearbyContainers { get; }
-    internal bool StationReady { get; }
-    internal RepairBiome? PowderBiome { get; }
-    internal string PowderPrefabName { get; }
+    internal bool HasRawMaterialCost { get; }
+    internal string RepairCostRoundingToken { get; }
+    internal string SkillFreeTicketToken { get; }
 
-    internal int VisualKey
+    internal RepairPreview WithPayment(RepairPaymentKind paymentKind, string ticketToken)
     {
-        get
-        {
-            unchecked
-            {
-                int hash = Item.GetHashCode();
-                hash = (hash * 397) ^ DurabilityBucketPercent;
-                hash = (hash * 397) ^ (int)PaymentKind;
-                hash = (hash * 397) ^ (StationReady ? 1 : 0);
-                hash = (hash * 397) ^ (PowderBiome?.GetHashCode() ?? 0);
-                foreach (RepairMaterialCost cost in Costs)
-                {
-                    hash = (hash * 397) ^ cost.ResourcePrefabName.GetHashCode();
-                    hash = (hash * 397) ^ cost.RequiredAmount;
-                    hash = (hash * 397) ^ cost.AvailableAmount;
-                }
-
-                return hash;
-            }
-        }
+        return new RepairPreview(
+            Item,
+            paymentKind,
+            Costs,
+            DurabilityBucketPercent,
+            UsesNearbyContainers,
+            HasRawMaterialCost,
+            RepairCostRoundingToken,
+            ticketToken);
     }
 
     internal bool HasSamePaymentPlan(RepairPreview other)
     {
         if (!ReferenceEquals(Item, other.Item)
             || PaymentKind != other.PaymentKind
-            || UsesNearbyContainers != other.UsesNearbyContainers
-            || StationReady != other.StationReady
-            || PowderBiome != other.PowderBiome
-            || !string.Equals(PowderPrefabName, other.PowderPrefabName, StringComparison.Ordinal)
+            || DurabilityBucketPercent != other.DurabilityBucketPercent
+            || HasRawMaterialCost != other.HasRawMaterialCost
+            || !string.Equals(RepairCostRoundingToken, other.RepairCostRoundingToken, StringComparison.Ordinal)
+            || !string.Equals(SkillFreeTicketToken, other.SkillFreeTicketToken, StringComparison.Ordinal)
+            || (PaymentKind != RepairPaymentKind.CraftingSkillFree
+                && UsesNearbyContainers != other.UsesNearbyContainers)
             || Costs.Count != other.Costs.Count)
         {
             return false;
@@ -120,27 +106,39 @@ internal sealed class RepairMaterialCost
     internal int AvailableAmount { get; set; }
     internal string ResourcePrefabName { get; }
     internal bool IsAffordable => AvailableAmount >= RequiredAmount;
-    internal string DisplayName => SourceRequirement.m_resItem.m_itemData.m_shared.m_name;
-    internal Sprite Icon => SourceRequirement.m_resItem.m_itemData.GetIcon();
 }
 
 internal static class RepairCostSystem
 {
+    private const string OnlyOneIngredientRoundingKey = "#only-one-ingredient-group";
+    private static volatile PrefabPatternMatcher _blacklistedMaterialPrefabs = PrefabPatternMatcher.Empty;
+
     private sealed class AggregatedRequirement
     {
-        internal AggregatedRequirement(Piece.Requirement sourceRequirement, int recipeAmount, string prefabName)
+        internal AggregatedRequirement(
+            Piece.Requirement sourceRequirement,
+            long baseRecipeAmount,
+            long qualityIncrementRecipeAmount,
+            string prefabName)
         {
             SourceRequirement = sourceRequirement;
-            RecipeAmount = recipeAmount;
+            BaseRecipeAmount = baseRecipeAmount;
+            QualityIncrementRecipeAmount = qualityIncrementRecipeAmount;
             PrefabName = prefabName;
         }
 
         internal Piece.Requirement SourceRequirement { get; }
-        internal int RecipeAmount { get; set; }
+        internal long BaseRecipeAmount { get; set; }
+        internal long QualityIncrementRecipeAmount { get; set; }
         internal string PrefabName { get; }
     }
 
     private static readonly List<ItemDrop.ItemData> WornItems = new();
+
+    internal static void SetBlacklistedPrefabPatterns(string? patterns)
+    {
+        _blacklistedMaterialPrefabs = PrefabPatternMatcher.Parse(patterns);
+    }
 
     internal static void GetRepairableItems(Player player, List<ItemDrop.ItemData> results)
     {
@@ -171,136 +169,53 @@ internal static class RepairCostSystem
             return false;
         }
 
-        Recipe? recipe = GetRepresentativeRecipe(item);
         if (player.NoCostCheat())
         {
             preview = new RepairPreview(
                 item,
-                recipe,
                 RepairPaymentKind.Free,
                 Array.Empty<RepairMaterialCost>(),
-                Array.Empty<Piece.Requirement>(),
                 GetDurabilityBucketPercent(item),
                 usesNearbyContainers: false);
             return true;
         }
 
         CraftingStation? station = player.GetCurrentCraftingStation();
-        if (station != null)
-        {
-            Recipe? stationRecipe = FindMaterialRepairRecipe(player, item, station);
-            if (stationRecipe == null)
-            {
-                return false;
-            }
-
-            preview = BuildStationPreview(
-                player,
-                item,
-                stationRecipe,
-                CanRepairAtStation(player, item, station, stationRecipe));
-            return true;
-        }
-
-        if (!IsFieldRepairEnabled()
-            || !RepairTierResolver.TryResolve(item, recipe, out RepairBiome biome)
-            || !RepairPowderRegistry.TryGetPowderPrefab(biome, out GameObject powderPrefab))
+        if (station == null)
         {
             return false;
         }
 
-        ItemDrop powderItem = powderPrefab.GetComponent<ItemDrop>();
-        if (powderItem == null)
+        Recipe? recipe = FindStationRepairRecipe(player, item, station);
+        if (recipe == null)
         {
             return false;
         }
 
-        preview = BuildPowderPreview(player, item, recipe, biome, powderItem);
+        RepairPreview? stationPreview = BuildStationPreview(player, item, recipe);
+        if (stationPreview == null)
+        {
+            return false;
+        }
+
+        preview = CraftingFreeRepairSystem.ResolvePreview(player, stationPreview);
         return true;
     }
 
     internal static bool CanAfford(Player player, RepairPreview preview)
     {
-        if (player.NoCostCheat() || preview.PaymentKind == RepairPaymentKind.Free)
+        if (player.NoCostCheat())
         {
             return true;
         }
 
-        return (preview.PaymentKind != RepairPaymentKind.StationMaterials || preview.StationReady)
-            && preview.Costs.All(cost => cost.IsAffordable);
-    }
-
-    internal static bool ConsumeRequirements(Player player, RepairPreview preview)
-    {
-        if (player.NoCostCheat() || preview.PaymentKind == RepairPaymentKind.Free)
+        return preview.PaymentKind switch
         {
-            return true;
-        }
-
-        if (!CanAfford(player, preview))
-        {
-            return false;
-        }
-
-        if (preview.PaymentKind == RepairPaymentKind.FieldPowder)
-        {
-            if (preview.Costs.Count != 1 || string.IsNullOrWhiteSpace(preview.PowderPrefabName))
-            {
-                return false;
-            }
-
-            return TryConsumePowder(
-                player.GetInventory(),
-                preview.PowderPrefabName,
-                preview.Costs[0].RequiredAmount);
-        }
-
-        if (preview.ConsumableRequirements.Length == 0)
-        {
-            return true;
-        }
-
-        if (preview.UsesNearbyContainers)
-        {
-            bool consumed = AzuCraftyBoxesCompat.TryConsume(
-                player,
-                preview.ConsumableRequirements,
-                out bool shouldCompleteRepair);
-            return consumed || shouldCompleteRepair;
-        }
-
-        return ConsumeInventoryRequirementsSafely(player.GetInventory(), preview.ConsumableRequirements);
-    }
-
-    internal static string BuildTooltipText(RepairPreview preview)
-    {
-        string mode = preview.PaymentKind switch
-        {
-            RepairPaymentKind.FieldPowder => Localize("$rrm_ui_field_powder"),
-            RepairPaymentKind.StationMaterials => Localize("$rrm_ui_repair_materials"),
-            _ => Localize("$rrm_ui_free_repair")
+            RepairPaymentKind.Free => true,
+            RepairPaymentKind.CraftingSkillFree => true,
+            RepairPaymentKind.StationMaterials => preview.Costs.All(cost => cost.IsAffordable),
+            _ => false
         };
-
-        List<string> lines = new()
-        {
-            mode,
-            $"{Localize("$rrm_ui_durability")}: {preview.DurabilityBucketPercent}%"
-        };
-
-        if (preview.PaymentKind == RepairPaymentKind.StationMaterials && !preview.StationReady)
-        {
-            lines.Add(Localize(RepairPowderRegistry.StationUnavailableToken));
-        }
-
-        foreach (RepairMaterialCost cost in preview.Costs)
-        {
-            string amountText = RepairRequiresMaterialsPlugin.ShowAvailableAmountInTooltip.Value.IsOn()
-                ? $"{cost.AvailableAmount}/{cost.RequiredAmount}"
-                : cost.RequiredAmount.ToString();
-            lines.Add($"{Localize(cost.DisplayName)}: {amountText}");
-        }
-
-        return string.Join("\n", lines);
     }
 
     internal static bool CanRepairStructurally(Player player, ItemDrop.ItemData item)
@@ -351,50 +266,17 @@ internal static class RepairCostSystem
             return true;
         }
 
-        Recipe? recipe = GetRepresentativeRecipe(item);
-        if (station != null)
-        {
-            return FindMaterialRepairRecipe(player, item, station) != null;
-        }
-
-        return IsFieldRepairEnabled()
-            && RepairTierResolver.TryResolve(item, recipe, out RepairBiome biome)
-            && RepairPowderRegistry.IsRegistered(biome);
+        return station != null && FindStationRepairRecipe(player, item, station) != null;
     }
 
-    private static Recipe? GetRepresentativeRecipe(ItemDrop.ItemData item)
-    {
-        IReadOnlyList<Recipe> exactRecipes = RepairRecipeCatalog.GetRecipes(item);
-        foreach (Recipe recipe in exactRecipes)
-        {
-            if (recipe != null && recipe.m_enabled)
-            {
-                return recipe;
-            }
-        }
-
-        if (exactRecipes.Count > 0)
-        {
-            return exactRecipes[0];
-        }
-
-        // Inventory ItemData normally carries m_dropPrefab. Retain the vanilla
-        // shared-name lookup only as a compatibility fallback for unusual items
-        // that do not, because it is ambiguous for normal modded prefabs.
-        return exactRecipes.Count == 0 && item.m_dropPrefab == null && ObjectDB.instance != null
-            ? ObjectDB.instance.GetRecipe(item)
-            : null;
-    }
-
-    private static Recipe? FindMaterialRepairRecipe(
+    private static Recipe? FindStationRepairRecipe(
         Player player,
         ItemDrop.ItemData item,
         CraftingStation station)
     {
         IReadOnlyList<Recipe> exactRecipes = RepairRecipeCatalog.GetRecipes(item);
         bool hasEnabledExactRecipe = false;
-        Recipe? firstEnabledSafeRecipe = null;
-        Recipe? firstEnabledMatchingRecipe = null;
+
         foreach (Recipe recipe in exactRecipes)
         {
             if (recipe == null || !recipe.m_enabled)
@@ -403,90 +285,53 @@ internal static class RepairCostSystem
             }
 
             hasEnabledExactRecipe = true;
-            if (!IsSafeMaterialRepairRecipe(item, recipe))
+            if (CanUseMaterialRepairRecipe(item, recipe)
+                && CanRepairAtStation(player, item, station, recipe))
             {
-                continue;
+                return recipe;
             }
+        }
 
-            firstEnabledSafeRecipe ??= recipe;
-            if (MatchesStationType(item, station, recipe))
+        if (!hasEnabledExactRecipe)
+        {
+            foreach (Recipe recipe in exactRecipes)
             {
-                firstEnabledMatchingRecipe ??= recipe;
-                if (CanRepairAtStation(player, item, station, recipe))
+                if (recipe != null
+                    && !recipe.m_enabled
+                    && CanUseMaterialRepairRecipe(item, recipe)
+                    && CanRepairAtStation(player, item, station, recipe))
                 {
                     return recipe;
                 }
             }
         }
 
-        if (firstEnabledMatchingRecipe != null)
+        // ItemData normally carries m_dropPrefab. Retain Valheim's shared-name
+        // lookup only for unusual items without an exact prefab recipe.
+        if (exactRecipes.Count == 0 && item.m_dropPrefab == null && ObjectDB.instance != null)
         {
-            return firstEnabledMatchingRecipe;
-        }
-
-        if (firstEnabledSafeRecipe != null)
-        {
-            return firstEnabledSafeRecipe;
-        }
-
-        if (!hasEnabledExactRecipe)
-        {
-            Recipe? firstDisabledSafeRecipe = null;
-            Recipe? firstDisabledMatchingRecipe = null;
-            foreach (Recipe recipe in exactRecipes)
+            Recipe? fallback = ObjectDB.instance.GetRecipe(item);
+            if (fallback != null
+                && CanUseMaterialRepairRecipe(item, fallback)
+                && CanRepairAtStation(player, item, station, fallback))
             {
-                if (recipe != null
-                    && !recipe.m_enabled
-                    && IsSafeMaterialRepairRecipe(item, recipe))
-                {
-                    firstDisabledSafeRecipe ??= recipe;
-                    if (MatchesStationType(item, station, recipe))
-                    {
-                        firstDisabledMatchingRecipe ??= recipe;
-                        if (CanRepairAtStation(player, item, station, recipe))
-                        {
-                            return recipe;
-                        }
-                    }
-                }
-            }
-
-            if (firstDisabledMatchingRecipe != null)
-            {
-                return firstDisabledMatchingRecipe;
-            }
-
-            if (firstDisabledSafeRecipe != null)
-            {
-                return firstDisabledSafeRecipe;
+                return fallback;
             }
         }
 
-        Recipe? fallback = GetRepresentativeRecipe(item);
-        return exactRecipes.Count == 0
-            && fallback != null
-            && IsSafeMaterialRepairRecipe(item, fallback)
-                ? fallback
-                : null;
+        return null;
     }
 
-    private static bool MatchesStationType(
-        ItemDrop.ItemData item,
-        CraftingStation station,
-        Recipe recipe)
-    {
-        return (recipe.m_repairStation != null && recipe.m_repairStation.m_name == station.m_name)
-            || (recipe.m_craftingStation != null && recipe.m_craftingStation.m_name == station.m_name)
-            || item.m_worldLevel < Game.m_worldLevel;
-    }
-
-    private static bool IsSafeMaterialRepairRecipe(ItemDrop.ItemData item, Recipe recipe)
+    private static bool CanUseMaterialRepairRecipe(ItemDrop.ItemData item, Recipe recipe)
     {
         string itemPrefabName = CleanPrefabName(item.m_dropPrefab != null ? item.m_dropPrefab.name : string.Empty);
         string itemSharedName = item.m_shared.m_name;
+        bool hasAllowedMaterial = false;
         foreach (Piece.Requirement requirement in recipe.m_resources ?? Array.Empty<Piece.Requirement>())
         {
-            if (requirement?.m_resItem == null || requirement.GetAmount(item.m_quality) <= 0)
+            if (requirement?.m_resItem == null
+                || (GetBaseRecipeAmount(requirement) <= 0
+                    && GetQualityIncrementRecipeAmount(requirement, item.m_quality) <= 0))
             {
                 continue;
             }
@@ -499,20 +344,33 @@ internal static class RepairCostSystem
             {
                 return false;
             }
+
+            if (!IsExcludedRepairMaterial(
+                    requirement.m_resItem.m_itemData.m_shared.m_itemType,
+                    resourcePrefabName))
+            {
+                hasAllowedMaterial = true;
+            }
         }
 
-        return true;
+        return hasAllowedMaterial;
     }
 
-    private static RepairPreview BuildStationPreview(
+    private static RepairPreview? BuildStationPreview(
         Player player,
         ItemDrop.ItemData item,
-        Recipe recipe,
-        bool stationReady)
+        Recipe recipe)
     {
         int bucketPercent = GetDurabilityBucketPercent(item);
-        float missingDurabilityMultiplier = 1f - bucketPercent / 100f;
-        float repairPercent = Mathf.Clamp(RepairRequiresMaterialsPlugin.RepairCostPercent.Value, 0f, 100f) / 100f;
+        int missingDurabilityPercent = 100 - bucketPercent;
+        double baseMaterialPercent = Mathf.Clamp(
+            RepairRequiresMaterialsPlugin.BaseMaterialCostPercent.Value,
+            0f,
+            100f);
+        double qualityIncrementMaterialPercent = Mathf.Clamp(
+            RepairRequiresMaterialsPlugin.QualityIncrementMaterialCostPercent.Value,
+            0f,
+            100f);
 
         Piece.Requirement[] recipeResources = recipe.m_resources ?? Array.Empty<Piece.Requirement>();
         Dictionary<string, AggregatedRequirement> requirementsByName = new(StringComparer.Ordinal);
@@ -525,117 +383,159 @@ internal static class RepairCostSystem
                 continue;
             }
 
-            int recipeAmount = Mathf.Max(0, requirement.GetAmount(item.m_quality));
-            if (recipeAmount <= 0)
+            long baseRecipeAmount = GetBaseRecipeAmount(requirement);
+            long qualityIncrementRecipeAmount = GetQualityIncrementRecipeAmount(requirement, item.m_quality);
+            if (baseRecipeAmount <= 0 && qualityIncrementRecipeAmount <= 0)
+            {
+                continue;
+            }
+
+            string resourcePrefabName = ResolveItemDropPrefabName(requirement.m_resItem);
+            if (IsExcludedRepairMaterial(
+                    requirement.m_resItem.m_itemData.m_shared.m_itemType,
+                    resourcePrefabName))
             {
                 continue;
             }
 
             string resourceName = requirement.m_resItem.m_itemData.m_shared.m_name;
-            if (requirementsByName.TryGetValue(resourceName, out AggregatedRequirement? existing))
+            if (recipe.m_requireOnlyOneIngredient)
             {
-                existing.RecipeAmount += recipeAmount;
+                orderedRequirements.Add(
+                    new AggregatedRequirement(
+                        requirement,
+                        baseRecipeAmount,
+                        qualityIncrementRecipeAmount,
+                        resourcePrefabName));
                 continue;
             }
 
-            string resourcePrefabName = ResolveItemDropPrefabName(requirement.m_resItem);
-            AggregatedRequirement aggregated = new(requirement, recipeAmount, resourcePrefabName);
+            if (requirementsByName.TryGetValue(resourceName, out AggregatedRequirement? existing))
+            {
+                existing.BaseRecipeAmount += baseRecipeAmount;
+                existing.QualityIncrementRecipeAmount += qualityIncrementRecipeAmount;
+                continue;
+            }
+
+            AggregatedRequirement aggregated = new(
+                requirement,
+                baseRecipeAmount,
+                qualityIncrementRecipeAmount,
+                resourcePrefabName);
             requirementsByName.Add(resourceName, aggregated);
             orderedRequirements.Add(aggregated);
+        }
+
+        if (orderedRequirements.Count == 0)
+        {
+            return null;
         }
 
         bool useNearbyContainers = AzuCraftyBoxesCompat.ShouldUseNearbyContainers();
         bool nearbyCountFailed = false;
         List<RepairMaterialCost> costs = new(orderedRequirements.Count);
-        List<Piece.Requirement> consumableRequirements = new(orderedRequirements.Count);
+        List<(RepairMaterialCost Cost, bool HasRawCost)>? alternatives = recipe.m_requireOnlyOneIngredient
+            ? new List<(RepairMaterialCost Cost, bool HasRawCost)>(orderedRequirements.Count)
+            : null;
+        RepairCostRoundingContext? roundingContext = null;
+        bool selectedPlanHasRawCost = false;
 
         foreach (AggregatedRequirement aggregated in orderedRequirements)
         {
-            int requiredAmount = CalculateRepairAmount(aggregated.RecipeAmount, repairPercent, missingDurabilityMultiplier);
+            double rawRepairAmount = CalculateRawRepairAmount(
+                aggregated.BaseRecipeAmount,
+                aggregated.QualityIncrementRecipeAmount,
+                baseMaterialPercent,
+                qualityIncrementMaterialPercent,
+                missingDurabilityPercent);
+            bool hasRawCost = rawRepairAmount > 0d;
+            if (hasRawCost)
+            {
+                roundingContext ??= RepairCostRoundingSystem.CreateContext(item, player.GetInventory());
+                selectedPlanHasRawCost = true;
+            }
+
+            string roundingKey = recipe.m_requireOnlyOneIngredient
+                ? OnlyOneIngredientRoundingKey
+                : aggregated.SourceRequirement.m_resItem.m_itemData.m_shared.m_name;
+            int requiredAmount = hasRawCost
+                ? roundingContext!.Round(rawRepairAmount, roundingKey)
+                : 0;
             if (requiredAmount <= 0)
             {
+                if (recipe.m_requireOnlyOneIngredient)
+                {
+                    alternatives!.Add((new RepairMaterialCost(
+                        aggregated.SourceRequirement,
+                        requiredAmount: 0,
+                        availableAmount: 0,
+                        aggregated.PrefabName), hasRawCost));
+                }
+
                 continue;
             }
 
             Piece.Requirement requirement = aggregated.SourceRequirement;
             int inventoryAmount = CountInventory(player, requirement);
+            RepairMaterialCost cost = new(
+                requirement,
+                requiredAmount,
+                inventoryAmount,
+                aggregated.PrefabName);
             int availableAmount = inventoryAmount;
             if (useNearbyContainers
-                && !AzuCraftyBoxesCompat.TryCountAvailable(player, requirement, inventoryAmount, out availableAmount))
+                && !AzuCraftyBoxesCompat.TryCountAvailable(player, cost, inventoryAmount, out availableAmount))
             {
                 useNearbyContainers = false;
                 nearbyCountFailed = true;
                 availableAmount = inventoryAmount;
             }
 
-            costs.Add(new RepairMaterialCost(
-                requirement,
-                requiredAmount,
-                availableAmount,
-                aggregated.PrefabName));
-
-            consumableRequirements.Add(new Piece.Requirement
+            cost.AvailableAmount = availableAmount;
+            if (alternatives != null)
             {
-                m_resItem = requirement.m_resItem,
-                m_amount = requiredAmount,
-                m_amountPerLevel = 0,
-                m_recover = false
-            });
+                alternatives.Add((cost, hasRawCost));
+            }
+            else
+            {
+                costs.Add(cost);
+            }
         }
 
         if (nearbyCountFailed)
         {
-            foreach (RepairMaterialCost cost in costs)
+            IEnumerable<RepairMaterialCost> countedCosts = alternatives != null
+                ? alternatives.Select(alternative => alternative.Cost)
+                : costs;
+            foreach (RepairMaterialCost cost in countedCosts)
             {
                 cost.AvailableAmount = CountInventory(player, cost.SourceRequirement);
             }
         }
 
+        if (alternatives is { Count: > 0 })
+        {
+            int selectedIndex = alternatives.FindIndex(alternative => alternative.Cost.IsAffordable);
+            if (selectedIndex < 0)
+            {
+                selectedIndex = 0;
+            }
+
+            (RepairMaterialCost selectedCost, bool selectedHasRawCost) = alternatives[selectedIndex];
+            selectedPlanHasRawCost = selectedHasRawCost;
+            costs = selectedCost.RequiredAmount > 0
+                ? new List<RepairMaterialCost> { selectedCost }
+                : new List<RepairMaterialCost>();
+        }
+
         return new RepairPreview(
             item,
-            recipe,
             RepairPaymentKind.StationMaterials,
             costs,
-            consumableRequirements.ToArray(),
             bucketPercent,
-            useNearbyContainers,
-            stationReady);
-    }
-
-    private static RepairPreview BuildPowderPreview(
-        Player player,
-        ItemDrop.ItemData item,
-        Recipe? recipe,
-        RepairBiome biome,
-        ItemDrop powderItem)
-    {
-        string powderPrefabName = RepairPowderRegistry.GetPowderPrefabName(biome);
-        int requiredAmount = CalculatePowderAmount(item);
-        int availableAmount = CountPowder(player.GetInventory(), powderPrefabName);
-        Piece.Requirement requirement = new()
-        {
-            m_resItem = powderItem,
-            m_amount = requiredAmount,
-            m_amountPerLevel = 0,
-            m_recover = false
-        };
-
-        RepairMaterialCost cost = new(
-            requirement,
-            requiredAmount,
-            availableAmount,
-            powderPrefabName);
-
-        return new RepairPreview(
-            item,
-            recipe,
-            RepairPaymentKind.FieldPowder,
-            new[] { cost },
-            new[] { requirement },
-            GetDurabilityBucketPercent(item),
-            usesNearbyContainers: false,
-            powderBiome: biome,
-            powderPrefabName: powderPrefabName);
+            useNearbyContainers && costs.Count > 0,
+            selectedPlanHasRawCost,
+            selectedPlanHasRawCost ? roundingContext?.Token ?? string.Empty : string.Empty);
     }
 
     private static int CountInventory(Player player, Piece.Requirement requirement)
@@ -644,194 +544,50 @@ internal static class RepairCostSystem
         return player.GetInventory().CountItems(name, -1, true);
     }
 
-    private static int CountPowder(Inventory inventory, string powderPrefabName)
+    private static bool IsExcludedRepairMaterial(
+        ItemDrop.ItemData.ItemType itemType,
+        string? prefabName)
     {
-        int total = 0;
-        foreach (ItemDrop.ItemData item in inventory.GetAllItems())
-        {
-            if (string.Equals(ResolveItemDataPrefabName(item), powderPrefabName, StringComparison.Ordinal))
-            {
-                total += item.m_stack;
-            }
-        }
-
-        return total;
+        return EquipmentTypeRules.IsEquipment(itemType)
+               || itemType == ItemDrop.ItemData.ItemType.Trophy
+               || _blacklistedMaterialPrefabs.IsMatch(prefabName);
     }
 
-    private static bool TryConsumePowder(Inventory inventory, string powderPrefabName, int amount)
+    private static long GetBaseRecipeAmount(Piece.Requirement requirement)
     {
-        if (amount <= 0)
-        {
-            return true;
-        }
-
-        List<ItemDrop.ItemData> stacks = inventory.GetAllItems()
-            .Where(item => string.Equals(ResolveItemDataPrefabName(item), powderPrefabName, StringComparison.Ordinal))
-            .ToList();
-
-        if (stacks.Sum(item => item.m_stack) < amount)
-        {
-            return false;
-        }
-
-        int remaining = amount;
-        bool confirmedConsumption = false;
-        foreach (ItemDrop.ItemData stack in stacks)
-        {
-            int remove = Mathf.Min(stack.m_stack, remaining);
-            int beforeStepAmount = CountPowder(inventory, powderPrefabName);
-            bool removeSucceeded;
-            int removedAmount;
-            try
-            {
-                removeSucceeded = inventory.RemoveItem(stack, remove);
-                removedAmount = beforeStepAmount - CountPowder(inventory, powderPrefabName);
-            }
-            catch (Exception exception)
-            {
-                try
-                {
-                    confirmedConsumption |= beforeStepAmount - CountPowder(inventory, powderPrefabName) > 0;
-                }
-                catch
-                {
-                    // The mutation was attempted and its result can no longer be
-                    // measured safely, so favor avoiding possible material loss.
-                    confirmedConsumption = true;
-                }
-
-                LogConsumptionMismatch(
-                    $"powder '{powderPrefabName}' removal threw {exception.GetType().Name}: {exception.Message}",
-                    confirmedConsumption);
-                return confirmedConsumption;
-            }
-
-            confirmedConsumption |= removedAmount > 0;
-            if (!removeSucceeded || removedAmount != remove)
-            {
-                LogConsumptionMismatch(
-                    $"powder '{powderPrefabName}' removed {removedAmount} instead of {remove}",
-                    confirmedConsumption);
-                return confirmedConsumption;
-            }
-
-            remaining -= removedAmount;
-            if (remaining <= 0)
-            {
-                return true;
-            }
-        }
-
-        LogConsumptionMismatch(
-            $"powder '{powderPrefabName}' removal ended with {remaining} still required",
-            confirmedConsumption);
-        return confirmedConsumption;
+        return Math.Max(0L, requirement.GetAmount(1));
     }
 
-    private static bool ConsumeInventoryRequirementsSafely(
-        Inventory inventory,
-        IEnumerable<Piece.Requirement> requirements)
+    private static long GetQualityIncrementRecipeAmount(Piece.Requirement requirement, int quality)
     {
-        Piece.Requirement[] source = requirements.ToArray();
-        if (source.Any(requirement => requirement == null || requirement.m_resItem == null))
-        {
-            return false;
-        }
-
-        Piece.Requirement[] plan = source
-            .Where(requirement => requirement.m_amount > 0)
-            .ToArray();
-
-        foreach (Piece.Requirement requirement in plan)
-        {
-            string itemName = requirement.m_resItem.m_itemData.m_shared.m_name;
-            if (inventory.CountItems(itemName, -1, true) < requirement.m_amount)
-            {
-                return false;
-            }
-        }
-
-        bool confirmedConsumption = false;
-        foreach (Piece.Requirement requirement in plan)
-        {
-            string itemName = requirement.m_resItem.m_itemData.m_shared.m_name;
-            int beforeAmount = inventory.CountItems(itemName, -1, true);
-            if (beforeAmount < requirement.m_amount)
-            {
-                LogConsumptionMismatch(
-                    $"inventory amount for '{itemName}' changed before removal",
-                    confirmedConsumption);
-                return confirmedConsumption;
-            }
-
-            int removedAmount;
-            try
-            {
-                inventory.RemoveItem(itemName, requirement.m_amount, -1, true);
-                removedAmount = beforeAmount - inventory.CountItems(itemName, -1, true);
-            }
-            catch (Exception exception)
-            {
-                try
-                {
-                    confirmedConsumption |= beforeAmount - inventory.CountItems(itemName, -1, true) > 0;
-                }
-                catch
-                {
-                    confirmedConsumption = true;
-                }
-
-                LogConsumptionMismatch(
-                    $"inventory removal threw {exception.GetType().Name}: {exception.Message}",
-                    confirmedConsumption);
-                return confirmedConsumption;
-            }
-
-            confirmedConsumption |= removedAmount > 0;
-            if (removedAmount != requirement.m_amount)
-            {
-                LogConsumptionMismatch(
-                    $"inventory removed {removedAmount} instead of {requirement.m_amount} for '{itemName}'",
-                    confirmedConsumption);
-                return confirmedConsumption;
-            }
-        }
-
-        return true;
+        return quality > 1
+            ? Math.Max(0L, requirement.GetAmount(quality))
+            : 0L;
     }
 
-    private static void LogConsumptionMismatch(string reason, bool repairWillComplete)
+    private static double CalculateRawRepairAmount(
+        long baseRecipeAmount,
+        long qualityIncrementRecipeAmount,
+        double baseMaterialPercent,
+        double qualityIncrementMaterialPercent,
+        int missingDurabilityPercent)
     {
-        string outcome = repairWillComplete
-            ? "The selected item will still be repaired because consumption may already have started."
-            : "The repair was cancelled before consumption started.";
-        RepairRequiresMaterialsPlugin.Log.LogWarning($"Repair material consumption mismatch: {reason}. {outcome}");
-    }
-
-    private static int CalculateRepairAmount(int recipeAmount, float repairPercent, float missingDurabilityMultiplier)
-    {
-        if (recipeAmount <= 0 || repairPercent <= 0f || missingDurabilityMultiplier <= 0f)
+        if (missingDurabilityPercent <= 0
+            || ((baseRecipeAmount <= 0 || baseMaterialPercent <= 0d)
+                && (qualityIncrementRecipeAmount <= 0 || qualityIncrementMaterialPercent <= 0d)))
         {
-            return 0;
+            return 0d;
         }
 
-        return Mathf.Max(0, Mathf.RoundToInt(recipeAmount * repairPercent * missingDurabilityMultiplier));
-    }
-
-    private static int CalculatePowderAmount(ItemDrop.ItemData item)
-    {
-        float maxDurability = item.GetMaxDurability();
-        if (maxDurability <= 0f)
+        double weightedPercentAmount = baseRecipeAmount * baseMaterialPercent
+            + qualityIncrementRecipeAmount * qualityIncrementMaterialPercent;
+        double scaledRepairAmount = weightedPercentAmount * missingDurabilityPercent / 10000d;
+        if (!(scaledRepairAmount > 0d))
         {
-            return 0;
+            return 0d;
         }
 
-        float missingFraction = 1f - Mathf.Clamp01(item.m_durability / maxDurability);
-        float repairPerPowder = Mathf.Clamp(
-            RepairRequiresMaterialsPlugin.PowderRepairPercent.Value,
-            1f,
-            100f) / 100f;
-        return Mathf.Max(1, Mathf.CeilToInt(missingFraction / repairPerPowder));
+        return scaledRepairAmount;
     }
 
     private static int GetDurabilityBucketPercent(ItemDrop.ItemData item)
@@ -845,16 +601,6 @@ internal static class RepairCostSystem
         float durabilityPercent = Mathf.Clamp01(item.m_durability / maxDurability);
         int bucket = Mathf.CeilToInt(durabilityPercent * 10f);
         return Mathf.Clamp(bucket, 0, 10) * 10;
-    }
-
-    private static bool IsFieldRepairEnabled()
-    {
-        return RepairRequiresMaterialsPlugin.EnableFieldRepair.Value.IsOn();
-    }
-
-    private static string ResolveItemDataPrefabName(ItemDrop.ItemData item)
-    {
-        return CleanPrefabName(item?.m_dropPrefab != null ? item.m_dropPrefab.name : string.Empty);
     }
 
     private static string ResolveItemDropPrefabName(ItemDrop itemDrop)
@@ -872,10 +618,5 @@ internal static class RepairCostSystem
         return result.EndsWith(cloneSuffix, StringComparison.OrdinalIgnoreCase)
             ? result.Substring(0, result.Length - cloneSuffix.Length).Trim()
             : result;
-    }
-
-    private static string Localize(string token)
-    {
-        return Localization.instance != null ? Localization.instance.Localize(token) : token;
     }
 }

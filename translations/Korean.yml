@@ -1,0 +1,16 @@
+rrm_skill_crafting_heading: "<color=orange>RepairRequiresMaterials</color>"
+rrm_skill_crafting_free_repair: "재료 비용이 있는 수리는 Crafting 스킬에 따라 무료가 될 수 있습니다(레벨 0에서 {0}%, 레벨 100에서 {1}%)."
+rrm_skill_crafting_bonus_output: "Crafting 스킬을 사용하는 제작대에서 대상 스택형 결과물은 아이템마다 독립 판정하며, Crafting 스킬 100에서 추가 생산 확률이 {0}%에 도달합니다."
+rrm_skill_crafting_equip_speed: "대기열에 추가되는 장비 장착 및 수동 해제 시간이 Crafting 스킬에 따라 감소합니다(레벨 100에서 최대 {0}%)."
+
+rrm_ui_free: "무료"
+
+rrm_dismantle_unavailable: "아이템 분해를 사용할 수 없습니다."
+rrm_dismantle_action: "대상 아이템 분해"
+rrm_dismantle_success: "아이템 {0}개를 분해했습니다."
+rrm_dismantle_no_equipment: "소각로에 분해할 수 있는 아이템이 없습니다."
+rrm_dismantle_no_room: "반환될 재료를 넣을 공간이 소각로에 부족합니다."
+rrm_dismantle_busy: "소각로가 사용 중입니다."
+rrm_dismantle_no_access: "이곳에서는 아이템을 분해할 수 없습니다."
+rrm_dismantle_inventory_changed: "소각로 내용물이 변경되어 분해를 취소했습니다."
+rrm_dismantle_failed: "아이템 분해에 실패했습니다."

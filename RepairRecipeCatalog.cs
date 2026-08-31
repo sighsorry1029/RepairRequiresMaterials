@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using HarmonyLib;
 
 namespace RepairRequiresMaterials;
 
@@ -16,33 +17,17 @@ internal static class RepairRecipeCatalog
     private static ObjectDB? _indexedDatabase;
     private static List<Recipe>? _indexedRecipeList;
     private static int _indexedRecipeCount = -1;
-    private static int _revision;
-
-    internal static int Revision
-    {
-        get
-        {
-            EnsureIndex();
-            return _revision;
-        }
-    }
 
     internal static IReadOnlyList<Recipe> GetRecipes(ItemDrop.ItemData item)
     {
-        string prefabName = CleanPrefabName(item?.m_dropPrefab?.name);
-        return GetRecipes(prefabName);
-    }
-
-    internal static IReadOnlyList<Recipe> GetRecipes(string prefabName)
-    {
         EnsureIndex();
-        string key = CleanPrefabName(prefabName);
+        string key = CleanPrefabName(item?.m_dropPrefab?.name);
         return key.Length > 0 && RecipesByOutput.TryGetValue(key, out List<Recipe>? recipes)
             ? recipes
             : NoRecipes;
     }
 
-    internal static string ResolveOutputPrefabName(Recipe? recipe)
+    private static string ResolveOutputPrefabName(Recipe? recipe)
     {
         ItemDrop? output = recipe?.m_item;
         string dropPrefabName = CleanPrefabName(output?.m_itemData?.m_dropPrefab?.name);
@@ -55,10 +40,6 @@ internal static class RepairRecipeCatalog
         _indexedRecipeList = null;
         _indexedRecipeCount = -1;
         RecipesByOutput.Clear();
-        unchecked
-        {
-            ++_revision;
-        }
     }
 
     private static void EnsureIndex()
@@ -77,10 +58,6 @@ internal static class RepairRecipeCatalog
         _indexedDatabase = database;
         _indexedRecipeList = recipes;
         _indexedRecipeCount = recipeCount;
-        unchecked
-        {
-            ++_revision;
-        }
 
         if (recipes == null)
         {
@@ -117,5 +94,22 @@ internal static class RepairRecipeCatalog
         return result.EndsWith(cloneSuffix, StringComparison.OrdinalIgnoreCase)
             ? result.Substring(0, result.Length - cloneSuffix.Length).Trim()
             : result;
+    }
+}
+
+[HarmonyPatch]
+internal static class ObjectDBRecipeCachePatch
+{
+    private static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+    {
+        yield return AccessTools.Method(typeof(ObjectDB), "Awake");
+        yield return AccessTools.Method(typeof(ObjectDB), nameof(ObjectDB.CopyOtherDB));
+        yield return AccessTools.Method(typeof(ObjectDB), "UpdateRegisters");
+    }
+
+    [HarmonyPriority(Priority.Last)]
+    private static void Postfix()
+    {
+        RepairRecipeCatalog.Invalidate();
     }
 }

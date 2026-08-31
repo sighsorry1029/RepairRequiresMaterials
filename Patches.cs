@@ -53,37 +53,14 @@ internal static class InventoryGuiUpdateRepairPatch
     [HarmonyPriority(Priority.Last)]
     private static void Postfix(InventoryGui __instance)
     {
-        RestoreFieldRepairControls(__instance);
-        RepairPanelController.Refresh(__instance);
-    }
-
-    private static void RestoreFieldRepairControls(InventoryGui gui)
-    {
-        Player player = Player.m_localPlayer;
-        if ((Object)(object)player == null
-            || !RepairSelectionState.TryGetSelectedPreview(player, out RepairPreview? preview)
-            || preview == null
-            || preview.PaymentKind != RepairPaymentKind.FieldPowder)
+        try
         {
-            return;
+            RepairStripController.Refresh(__instance);
         }
-
-        bool affordable = RepairCostSystem.CanAfford(player, preview);
-        gui.m_repairPanel.gameObject.SetActive(true);
-        gui.m_repairPanelSelection.gameObject.SetActive(true);
-        gui.m_repairButton.gameObject.SetActive(true);
-        gui.m_repairButton.enabled = true;
-        gui.m_repairButton.interactable = affordable;
-        gui.m_repairButtonGlow.gameObject.SetActive(affordable);
-
-        if (affordable)
+        finally
         {
-            Color glowColor = gui.m_repairButtonGlow.color;
-            glowColor.a = 0.5f + Mathf.Sin(Time.time * 5f) * 0.5f;
-            gui.m_repairButtonGlow.color = glowColor;
+            RepairService.FlushDirtyNotifications();
         }
-
-        Canvas.ForceUpdateCanvases();
     }
 }
 
@@ -92,7 +69,8 @@ internal static class InventoryGuiHidePatch
 {
     private static void Postfix()
     {
-        RepairPanelController.Hide();
+        RepairStripController.Hide();
+        RepairService.FlushDirtyNotifications();
     }
 }
 
@@ -101,25 +79,7 @@ internal static class InventoryGuiOnDestroyPatch
 {
     private static void Prefix()
     {
-        RepairPanelController.Destroy();
+        RepairStripController.Destroy();
         RepairSelectionState.Reset();
-    }
-}
-
-[HarmonyPatch]
-internal static class ObjectDBTierCachePatch
-{
-    private static System.Collections.Generic.IEnumerable<System.Reflection.MethodBase> TargetMethods()
-    {
-        yield return AccessTools.Method(typeof(ObjectDB), "Awake");
-        yield return AccessTools.Method(typeof(ObjectDB), nameof(ObjectDB.CopyOtherDB));
-        yield return AccessTools.Method(typeof(ObjectDB), "UpdateRegisters");
-    }
-
-    [HarmonyPriority(Priority.Last)]
-    private static void Postfix()
-    {
-        RepairRecipeCatalog.Invalidate();
-        RepairTierResolver.Invalidate();
     }
 }

@@ -9,6 +9,8 @@ namespace RepairRequiresMaterials;
 
 internal static class AzuCraftyBoxesCompat
 {
+    private const string DeferredKgDrawerTypeName = "AzuCraftyBoxes.IContainers.kgDrawer";
+
     private sealed class ContainerConsumption
     {
         internal ContainerConsumption(
@@ -52,10 +54,6 @@ internal static class AzuCraftyBoxesCompat
     private static bool _initialized;
     private static bool _available;
     private static bool _failureLogged;
-    private static Type? _pluginType;
-    private static Type? _boxesType;
-    private static Type? _queryFrameType;
-    private static Type? _miscFunctionsType;
     private static FieldInfo? _rangeField;
     private static MethodInfo? _queryFrameGetMethod;
     private static MethodInfo? _shouldPreventMethod;
@@ -64,11 +62,6 @@ internal static class AzuCraftyBoxesCompat
 
     internal static bool ShouldUseNearbyContainers()
     {
-        if (!RepairRequiresMaterialsPlugin.UseAzuCraftyBoxesContainers.Value.IsOn())
-        {
-            return false;
-        }
-
         try
         {
             return EnsureInitialized() && !ShouldPrevent();
@@ -82,7 +75,7 @@ internal static class AzuCraftyBoxesCompat
 
     internal static bool TryCountAvailable(
         Player player,
-        Piece.Requirement requirement,
+        RepairMaterialCost cost,
         int currentAmount,
         out int totalAmount)
     {
@@ -94,6 +87,12 @@ internal static class AzuCraftyBoxesCompat
 
         try
         {
+            Piece.Requirement requirement = cost.SourceRequirement;
+            if (requirement?.m_resItem == null)
+            {
+                return false;
+            }
+
             IList? nearbyContainers = GetNearbyContainers(player);
             if (nearbyContainers == null)
             {
@@ -101,19 +100,16 @@ internal static class AzuCraftyBoxesCompat
             }
 
             string itemName = requirement.m_resItem.m_itemData.m_shared.m_name;
-            string prefabName = Utils.GetPrefabName(requirement.m_resItem.gameObject);
+            string prefabName = cost.ResourcePrefabName;
 
             foreach (object? container in nearbyContainers)
             {
                 if (container == null
                     || !TryGetContainerMethods(
                         container,
-                        out MethodInfo? getPrefabNameMethod,
-                        out MethodInfo? itemCountMethod,
-                        out MethodInfo? processInventoryMethod)
-                    || getPrefabNameMethod == null
-                    || itemCountMethod == null
-                    || processInventoryMethod == null)
+                        out MethodInfo getPrefabNameMethod,
+                        out MethodInfo itemCountMethod,
+                        out MethodInfo processInventoryMethod))
                 {
                     continue;
                 }
@@ -138,7 +134,7 @@ internal static class AzuCraftyBoxesCompat
 
     internal static bool TryConsume(
         Player player,
-        Piece.Requirement[] requirements,
+        IReadOnlyList<RepairMaterialCost> costs,
         out bool shouldCompleteRepair)
     {
         shouldCompleteRepair = false;
@@ -156,22 +152,23 @@ internal static class AzuCraftyBoxesCompat
             }
 
             Inventory inventory = player.GetInventory();
-            List<RequirementConsumption> plan = new(requirements.Length);
-            foreach (Piece.Requirement requirement in requirements)
+            List<RequirementConsumption> plan = new(costs.Count);
+            foreach (RepairMaterialCost cost in costs)
             {
-                if (requirement.m_resItem == null)
+                Piece.Requirement requirement = cost.SourceRequirement;
+                if (requirement?.m_resItem == null)
                 {
                     return false;
                 }
 
-                int requiredAmount = Math.Max(0, requirement.GetAmount(1));
+                int requiredAmount = Math.Max(0, cost.RequiredAmount);
                 if (requiredAmount <= 0)
                 {
                     continue;
                 }
 
                 string itemName = requirement.m_resItem.m_itemData.m_shared.m_name;
-                string prefabName = Utils.GetPrefabName(requirement.m_resItem.gameObject);
+                string prefabName = cost.ResourcePrefabName;
                 int inventoryAmount = Math.Min(requiredAmount, inventory.CountItems(itemName, -1, true));
                 int remainingAmount = requiredAmount - inventoryAmount;
                 RequirementConsumption requirementPlan = new(itemName, prefabName, inventoryAmount);
@@ -186,12 +183,9 @@ internal static class AzuCraftyBoxesCompat
                     if (container == null
                         || !TryGetContainerMethods(
                             container,
-                            out MethodInfo? getPrefabNameMethod,
-                            out MethodInfo? itemCountMethod,
-                            out MethodInfo? processInventoryMethod)
-                        || getPrefabNameMethod == null
-                        || itemCountMethod == null
-                        || processInventoryMethod == null
+                            out MethodInfo getPrefabNameMethod,
+                            out MethodInfo itemCountMethod,
+                            out MethodInfo processInventoryMethod)
                         || !CanPull(container, getPrefabNameMethod, prefabName))
                     {
                         continue;
@@ -369,28 +363,28 @@ internal static class AzuCraftyBoxesCompat
         }
 
         Assembly assembly = pluginInfo.Instance.GetType().Assembly;
-        _pluginType = assembly.GetType("AzuCraftyBoxes.AzuCraftyBoxesPlugin");
-        _boxesType = assembly.GetType("AzuCraftyBoxes.Util.Functions.Boxes");
-        _queryFrameType = assembly.GetType("AzuCraftyBoxes.Util.Functions.Boxes+QueryFrame");
-        _miscFunctionsType = assembly.GetType("AzuCraftyBoxes.Util.Functions.MiscFunctions");
+        Type? pluginType = assembly.GetType("AzuCraftyBoxes.AzuCraftyBoxesPlugin");
+        Type? boxesType = assembly.GetType("AzuCraftyBoxes.Util.Functions.Boxes");
+        Type? queryFrameType = assembly.GetType("AzuCraftyBoxes.Util.Functions.Boxes+QueryFrame");
+        Type? miscFunctionsType = assembly.GetType("AzuCraftyBoxes.Util.Functions.MiscFunctions");
 
-        _rangeField = _pluginType?.GetField("mRange", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-        _queryFrameGetMethod = _queryFrameType?.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+        _rangeField = pluginType?.GetField("mRange", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+        _queryFrameGetMethod = queryFrameType?.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             .FirstOrDefault(method => method.Name == "Get" && method.IsGenericMethodDefinition);
-        _shouldPreventMethod = _miscFunctionsType?.GetMethod(
+        _shouldPreventMethod = miscFunctionsType?.GetMethod(
             "ShouldPrevent",
             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-        _canItemBePulledMethod = _boxesType?.GetMethod(
+        _canItemBePulledMethod = boxesType?.GetMethod(
             "CanItemBePulled",
             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-        _checkAndDecrementMethod = _boxesType?.GetMethod(
+        _checkAndDecrementMethod = boxesType?.GetMethod(
             "CheckAndDecrement",
             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
 
-        _available = _pluginType != null
-            && _boxesType != null
-            && _queryFrameType != null
-            && _miscFunctionsType != null
+        _available = pluginType != null
+            && boxesType != null
+            && queryFrameType != null
+            && miscFunctionsType != null
             && _rangeField != null
             && _queryFrameGetMethod != null
             && _shouldPreventMethod != null
@@ -409,16 +403,19 @@ internal static class AzuCraftyBoxesCompat
 
     private static bool TryGetContainerMethods(
         object container,
-        out MethodInfo? getPrefabNameMethod,
-        out MethodInfo? itemCountMethod,
-        out MethodInfo? processInventoryMethod)
+        out MethodInfo getPrefabNameMethod,
+        out MethodInfo itemCountMethod,
+        out MethodInfo processInventoryMethod)
     {
         const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
         Type type = container.GetType();
-        getPrefabNameMethod = type.GetMethod("GetPrefabName", flags);
-        itemCountMethod = type.GetMethod("ItemCount", flags);
-        processInventoryMethod = type.GetMethod("ProcessContainerInventory", flags);
-        return getPrefabNameMethod != null && itemCountMethod != null;
+        getPrefabNameMethod = type.GetMethod("GetPrefabName", flags)!;
+        itemCountMethod = type.GetMethod("ItemCount", flags)!;
+        processInventoryMethod = type.GetMethod("ProcessContainerInventory", flags)!;
+        return getPrefabNameMethod != null
+               && itemCountMethod != null
+               && processInventoryMethod != null
+               && SupportsVerifiedRemoval(container);
     }
 
     private static bool CanPull(object container, MethodInfo getPrefabNameMethod, string prefabName)
@@ -428,6 +425,18 @@ internal static class AzuCraftyBoxesCompat
             _canItemBePulledMethod!.Invoke(
                 null,
                 new object[] { containerPrefab, prefabName, string.Empty }) ?? false);
+    }
+
+    private static bool SupportsVerifiedRemoval(object container)
+    {
+        // kg_ItemDrawers removal is an asynchronous RPC and Azu's wrapper keeps
+        // a snapshot count, so the same wrapper cannot confirm that removal.
+        // Exclude it rather than risk consuming materials while cancelling the
+        // repair, or trusting an unacknowledged RPC and granting a free repair.
+        return !string.Equals(
+            container.GetType().FullName,
+            DeferredKgDrawerTypeName,
+            StringComparison.Ordinal);
     }
 
     private static int GetPullableAmount(object container, MethodInfo itemCountMethod, string itemName)
