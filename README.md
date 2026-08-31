@@ -37,7 +37,7 @@ Hold the configured modifier and use the incinerator to dismantle items while or
 ## Features
 
 - Repairs equipment with materials from its exact crafting recipe.
-- Keeps the vanilla repair button and adds a compact, background-free material strip.
+- Keeps the vanilla repair button and adds a compact material strip with subtle per-slot backgrounds.
 - Uses Crafting skill for free repairs, bonus output, and faster equipment changes.
 - Pulls missing repair materials from permitted AzuCraftyBoxes containers when available.
 - Dismantles equipment and explicitly allowed items in an incinerator without replacing normal incineration.

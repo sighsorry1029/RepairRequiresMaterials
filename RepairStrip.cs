@@ -60,6 +60,7 @@ internal static class RepairStripController
     private const float WheelHeight = 44f;
 
     private static readonly Color MissingAmountColor = new(1f, 0.32f, 0.32f, 1f);
+    private static readonly Color SlotBackgroundColor = new(0.055f, 0.035f, 0.025f, 0.42f);
     private static readonly List<MaterialSlot> MaterialSlots = new();
 
     private static InventoryGui? _owner;
@@ -263,7 +264,12 @@ internal static class RepairStripController
 
     private static void CreateItemSlot(InventoryGui gui)
     {
-        GameObject itemRoot = CreateSlotRoot("SelectedRepairItem", ItemSlotWidth, ItemSlotHeight, _root!.transform);
+        GameObject itemRoot = CreateSlotRoot(
+            "SelectedRepairItem",
+            ItemSlotWidth,
+            ItemSlotHeight,
+            _root!.transform,
+            withSquareBackground: true);
 
         GameObject iconObject = new("Icon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         iconObject.transform.SetParent(itemRoot.transform, false);
@@ -299,7 +305,8 @@ internal static class RepairStripController
             "CraftingSkillFreeRepair",
             MaterialSlotWidth,
             MaterialSlotHeight,
-            _materialsTransform!);
+            _materialsTransform!,
+            withSquareBackground: true);
 
         TMP_Text? template = FindInventoryTextTemplate(gui, "amount")
             ?? FindRequirementAmountTemplate(gui);
@@ -333,7 +340,8 @@ internal static class RepairStripController
             $"RepairMaterial_{index}",
             MaterialSlotWidth,
             MaterialSlotHeight,
-            _materialsTransform!);
+            _materialsTransform!,
+            withSquareBackground: true);
 
         GameObject iconObject = new("Icon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         iconObject.transform.SetParent(root.transform, false);
@@ -356,7 +364,12 @@ internal static class RepairStripController
         return new MaterialSlot(root, icon, amount, amount.color);
     }
 
-    private static GameObject CreateSlotRoot(string name, float width, float height, Transform parent)
+    private static GameObject CreateSlotRoot(
+        string name,
+        float width,
+        float height,
+        Transform parent,
+        bool withSquareBackground = false)
     {
         GameObject root = new(name, typeof(RectTransform), typeof(LayoutElement));
         root.transform.SetParent(parent, false);
@@ -367,7 +380,38 @@ internal static class RepairStripController
         layout.preferredHeight = height;
         layout.flexibleWidth = 0f;
         layout.flexibleHeight = 0f;
+
+        if (withSquareBackground)
+        {
+            CreateSquareBackground(root.transform, Mathf.Min(width, height));
+        }
+
         return root;
+    }
+
+    private static void CreateSquareBackground(Transform parent, float size)
+    {
+        GameObject backgroundObject = new(
+            "Background",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        backgroundObject.transform.SetParent(parent, false);
+
+        RectTransform rectTransform = (RectTransform)backgroundObject.transform;
+        rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+        rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        rectTransform.anchoredPosition = Vector2.zero;
+        rectTransform.sizeDelta = new Vector2(size, size);
+        rectTransform.localScale = Vector3.one;
+        rectTransform.SetAsFirstSibling();
+
+        Image background = backgroundObject.GetComponent<Image>();
+        background.sprite = null;
+        background.type = Image.Type.Simple;
+        background.color = SlotBackgroundColor;
+        background.raycastTarget = false;
     }
 
     private static void UpdateContents(RepairPreview preview)
