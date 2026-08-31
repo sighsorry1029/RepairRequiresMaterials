@@ -96,9 +96,9 @@ Crafting 스킬이 지정된 제작대에서 stackable 결과물은 바닐라의
 
 ## 관리자 일괄 내구도 명령
 
-`rrm_setdurability <0-100>`은 `ZNet.LocalPlayerIsAdminOrHost()`를 직접 확인한 뒤 명령을 실행한 로컬 플레이어의 인벤토리를 한 번 순회한다. 기존 인시너레이터 분해와 같은 equipment type allowlist에 `m_useDurability`와 유효한 품질 반영 최대 내구도 조건을 더하므로, 장착 여부와 무관하게 무기, 방패, 도구, 방어구, 망토, 횃불, utility와 trinket만 포함하고 탄약·재료·소모품은 제외한다. 각 값은 `GetMaxDurability() × n / 100`으로 설정하고 실제 변경 뒤 `Inventory.Changed()`를 한 번만 호출한다.
+`rrm_setdurability <0-100>`은 호스트에서는 즉시 실행하고, 원격 클라이언트에서는 서버에 승인 RPC를 보낸다. 서버는 요청을 보낸 실제 `ZRpc` 연결의 관리자 권한을 확인하며, 승인 응답을 받은 클라이언트만 자신의 인벤토리를 한 번 순회한다. 기존 인시너레이터 분해와 같은 equipment type allowlist에 `m_useDurability`와 유효한 품질 반영 최대 내구도 조건을 더하므로, 장착 여부와 무관하게 무기, 방패, 도구, 방어구, 망토, 횃불, utility와 trinket만 포함하고 탄약·재료·소모품은 제외한다. 각 값은 `GetMaxDurability() × n / 100`으로 설정하고 실제 변경 뒤 `Inventory.Changed()`를 한 번만 호출한다.
 
-Valheim의 `onlyAdmin` 표시는 로컬 명령 권한을 완전하게 검사하지 않고, `isCheat` 명령은 전용 서버의 관리자 클라이언트에서 로컬 실행될 수 없으므로 명령 callback의 명시적 권한 검사를 사용한다. 플레이어 인벤토리는 client-owned이므로 다른 플레이어를 대상으로 하는 remote server 명령은 제공하지 않는다.
+Valheim의 `onlyAdmin` 표시는 로컬 명령 권한을 완전하게 검사하지 않고, `isCheat` 명령은 전용 서버의 관리자 클라이언트에서 로컬 실행될 수 없으므로 명령 자체는 로컬 일반 명령으로 유지한다. 대신 direct `ZRpc` 승인 왕복으로 실제 연결의 관리자 여부를 서버에서 판정한다. 플레이어 인벤토리는 client-owned이므로 서버는 승인만 담당하고 다른 플레이어를 대상으로 하는 명령은 제공하지 않는다.
 
 이 명령은 재료 소비, Crafting 스킬 증가, `RepairCostRoundingSystem.CompleteSuccessfulRepair` 또는 `CraftingFreeRepairSystem.CompleteSuccessfulRepair`를 호출하지 않는다. 따라서 기존 재료 반올림 결과와 `Free`/`Paid` 판정 및 회차를 모두 유지하고, 명령을 100%로 실행해도 정상 수리 완료로 취급하지 않는다. 정상 수리로 회차가 증가한 뒤 명령으로 다시 손상시킨 경우에만 다음 제작대 preview에서 새 결과가 자연스럽게 결정된다.
 

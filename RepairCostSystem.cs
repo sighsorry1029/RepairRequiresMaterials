@@ -189,7 +189,18 @@ internal static class RepairCostSystem
         Recipe? recipe = FindStationRepairRecipe(player, item, station);
         if (recipe == null)
         {
-            return false;
+            if (!CanUseExternalStationRepair(player, item, station))
+            {
+                return false;
+            }
+
+            preview = new RepairPreview(
+                item,
+                RepairPaymentKind.StationMaterials,
+                Array.Empty<RepairMaterialCost>(),
+                GetDurabilityBucketPercent(item),
+                usesNearbyContainers: false);
+            return true;
         }
 
         RepairPreview? stationPreview = BuildStationPreview(player, item, recipe);
@@ -266,7 +277,26 @@ internal static class RepairCostSystem
             return true;
         }
 
-        return station != null && FindStationRepairRecipe(player, item, station) != null;
+        return station != null
+               && (FindStationRepairRecipe(player, item, station) != null
+                   || CanUseExternalStationRepair(player, item, station));
+    }
+
+    private static bool CanUseExternalStationRepair(
+        Player player,
+        ItemDrop.ItemData item,
+        CraftingStation station)
+    {
+        if (!station.CheckUsable(player, false)
+            || RepairRecipeCatalog.GetRecipes(item).Count != 0
+            || ObjectDB.instance == null
+            || ObjectDB.instance.GetRecipe(item) != null)
+        {
+            return false;
+        }
+
+        InventoryGui gui = InventoryGui.instance;
+        return (Object)(object)gui != null && gui.CanRepair(item);
     }
 
     private static Recipe? FindStationRepairRecipe(
@@ -324,13 +354,15 @@ internal static class RepairCostSystem
 
     private static bool CanUseMaterialRepairRecipe(ItemDrop.ItemData item, Recipe recipe)
     {
+        Piece.Requirement[] recipeResources = recipe.m_resources ?? Array.Empty<Piece.Requirement>();
+        bool useFirstUpgradeAsBase = !HasBaseRecipeCost(recipeResources);
         string itemPrefabName = CleanPrefabName(item.m_dropPrefab != null ? item.m_dropPrefab.name : string.Empty);
         string itemSharedName = item.m_shared.m_name;
         bool hasAllowedMaterial = false;
-        foreach (Piece.Requirement requirement in recipe.m_resources ?? Array.Empty<Piece.Requirement>())
+        foreach (Piece.Requirement requirement in recipeResources)
         {
             if (requirement?.m_resItem == null
-                || (GetBaseRecipeAmount(requirement) <= 0
+                || (GetBaseRepairAmount(requirement, useFirstUpgradeAsBase) <= 0
                     && GetQualityIncrementRecipeAmount(requirement, item.m_quality) <= 0))
             {
                 continue;
@@ -373,6 +405,7 @@ internal static class RepairCostSystem
             100f);
 
         Piece.Requirement[] recipeResources = recipe.m_resources ?? Array.Empty<Piece.Requirement>();
+        bool useFirstUpgradeAsBase = !HasBaseRecipeCost(recipeResources);
         Dictionary<string, AggregatedRequirement> requirementsByName = new(StringComparer.Ordinal);
         List<AggregatedRequirement> orderedRequirements = new(recipeResources.Length);
 
@@ -383,7 +416,7 @@ internal static class RepairCostSystem
                 continue;
             }
 
-            long baseRecipeAmount = GetBaseRecipeAmount(requirement);
+            long baseRecipeAmount = GetBaseRepairAmount(requirement, useFirstUpgradeAsBase);
             long qualityIncrementRecipeAmount = GetQualityIncrementRecipeAmount(requirement, item.m_quality);
             if (baseRecipeAmount <= 0 && qualityIncrementRecipeAmount <= 0)
             {
@@ -553,9 +586,21 @@ internal static class RepairCostSystem
                || _blacklistedMaterialPrefabs.IsMatch(prefabName);
     }
 
-    private static long GetBaseRecipeAmount(Piece.Requirement requirement)
+    private static bool HasBaseRecipeCost(IEnumerable<Piece.Requirement> requirements)
     {
-        return Math.Max(0L, requirement.GetAmount(1));
+        return requirements.Any(requirement => requirement?.m_resItem != null && requirement.GetAmount(1) > 0);
+    }
+
+    private static long GetBaseRepairAmount(Piece.Requirement requirement, bool useFirstUpgradeAsBase)
+    {
+        long baseAmount = Math.Max(0L, requirement.GetAmount(1));
+        if (baseAmount > 0 || !useFirstUpgradeAsBase)
+        {
+            return baseAmount;
+        }
+
+        // Upgrade-only recipes encode their first usable material amount at quality 2.
+        return Math.Max(0L, requirement.GetAmount(2));
     }
 
     private static long GetQualityIncrementRecipeAmount(Piece.Requirement requirement, int quality)

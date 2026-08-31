@@ -25,6 +25,7 @@ internal static class InventoryGuiHaveRepairableItemsPatch
 [HarmonyPatch(typeof(InventoryGui), nameof(InventoryGui.RepairOneItem))]
 internal static class InventoryGuiRepairOneItemPatch
 {
+    [HarmonyBefore("sighsorry.Homestead")]
     private static bool Prefix()
     {
         Player player = Player.m_localPlayer;

@@ -33,7 +33,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
     }
 
     internal const string ModName = "RepairRequiresMaterials";
-    internal const string ModVersion = "1.0.1";
+    internal const string ModVersion = "1.0.2";
     internal const string Author = "sighsorry";
     internal const string ModGuid = $"{Author}.{ModName}";
 
@@ -112,7 +112,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
             "Base Material Cost Percent",
             15f,
             new ConfigDescription(
-                "Percent of each quality-1 recipe material amount used for a full repair before the durability bucket multiplier is applied.",
+                "Percent of each quality-1 recipe material amount used for a full repair before the durability bucket multiplier is applied. If a recipe has no crafting material cost, its first upgrade material amount is used as the base amount.",
                 new AcceptableValueRange<float>(0f, 100f)),
             300);
 

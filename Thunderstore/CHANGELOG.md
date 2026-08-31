@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2
+
+- Added server-authoritative administrator verification for `rrm_setdurability` on dedicated servers.
+- Added safe repair support for recipe-less equipment exposed by other mods, including Homestead's Dvergr circlet.
+- Used the first upgrade material amount as the base repair cost for upgrade-only recipes.
+
 ## 1.0.1
 
 - Added subtle square backgrounds behind the selected repair item, each material cost, and the free-repair indicator for better readability.
