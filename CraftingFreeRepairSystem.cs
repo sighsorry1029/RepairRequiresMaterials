@@ -64,7 +64,6 @@ internal static class CraftingFreeRepairSystem
 
         ItemDrop.ItemData item = stationPreview.Item;
         Inventory inventory = player.GetInventory();
-        string currentPlan = BuildPlanFingerprint(stationPreview);
         bool hasMaterialCost = HasMaterialCost(stationPreview);
 
         TicketState? state = ReadState(item, inventory, out bool corruptState);
@@ -79,7 +78,7 @@ internal static class CraftingFreeRepairSystem
                 Guid.NewGuid().ToString("N"),
                 0UL,
                 TicketOutcome.Paid,
-                currentPlan);
+                BuildPlanFingerprint(stationPreview));
             return WriteState(item, inventory, state)
                 ? stationPreview.WithPayment(RepairPaymentKind.StationMaterials, state.Serialize())
                 : stationPreview;
@@ -97,6 +96,7 @@ internal static class CraftingFreeRepairSystem
 
         if (state is { Outcome: TicketOutcome.Free })
         {
+            string currentPlan = BuildPlanFingerprint(stationPreview);
             if (!string.Equals(state.PlanFingerprint, currentPlan, StringComparison.Ordinal))
             {
                 // A revealed free result is valid only for the exact cost snapshot
@@ -131,7 +131,7 @@ internal static class CraftingFreeRepairSystem
         state.Outcome = GetDeterministicRoll(state.ItemId, state.Cycle) < chance
             ? TicketOutcome.Free
             : TicketOutcome.Paid;
-        state.PlanFingerprint = currentPlan;
+        state.PlanFingerprint = BuildPlanFingerprint(stationPreview);
         if (!WriteState(item, inventory, state))
         {
             // Failure to persist a decision must never grant a rerollable free repair.

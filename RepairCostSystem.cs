@@ -220,13 +220,24 @@ internal static class RepairCostSystem
             return true;
         }
 
-        return preview.PaymentKind switch
+        switch (preview.PaymentKind)
         {
-            RepairPaymentKind.Free => true,
-            RepairPaymentKind.CraftingSkillFree => true,
-            RepairPaymentKind.StationMaterials => preview.Costs.All(cost => cost.IsAffordable),
-            _ => false
-        };
+            case RepairPaymentKind.Free:
+            case RepairPaymentKind.CraftingSkillFree:
+                return true;
+            case RepairPaymentKind.StationMaterials:
+                for (int index = 0; index < preview.Costs.Count; ++index)
+                {
+                    if (!preview.Costs[index].IsAffordable)
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            default:
+                return false;
+        }
     }
 
     internal static bool CanRepairStructurally(Player player, ItemDrop.ItemData item)

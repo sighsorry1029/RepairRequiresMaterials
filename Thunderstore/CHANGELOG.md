@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.3
+
+- Moved the extended Crafting skill tooltip beside the Skills panel with safe-area positioning, gamepad support, and localized UI compatibility.
+- Reduced repeated repair preview, affordability, UI lookup, and incinerator blacklist work without changing repair or dismantling rules.
+- Added opt-in Debug deployment through `DeployToGame=true` so only the final merged DLL is copied to the game.
+
 ## 1.0.2
 
 - Added server-authoritative administrator verification for `rrm_setdurability` on dedicated servers.

@@ -14,6 +14,7 @@
         <FileAlignment>512</FileAlignment>
         <LangVersion>10.0</LangVersion>
         <Nullable>enable</Nullable>
+        <DeployToGame Condition="'$(DeployToGame)' == ''">false</DeployToGame>
     </PropertyGroup>
     <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
         <PlatformTarget>AnyCPU</PlatformTarget>
@@ -188,9 +189,9 @@
     </Target>
     <Target Name="CopyOutputDLL" AfterTargets="GetAssemblyVersion">
         <Error Text="DLL not found in target directory." Condition="!Exists('$(TargetDir)$(AssemblyName).dll')"/>
-        <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFolder="$(CopyOutputDLLPath)" OverwriteReadOnlyFiles="true"/>
-        <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFolder="$(CopyOutputDLLPath2)" OverwriteReadOnlyFiles="true" Condition="Exists('$(CopyOutputDLLPath2)')"/>
-        <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFolder="$(CopyOutputDLLPath3)" OverwriteReadOnlyFiles="true" Condition="Exists('$(CopyOutputDLLPath3)')"/>
+        <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFolder="$(CopyOutputDLLPath)" OverwriteReadOnlyFiles="true" Condition="'$(DeployToGame)' == 'true'"/>
+        <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFolder="$(CopyOutputDLLPath2)" OverwriteReadOnlyFiles="true" Condition="'$(DeployToGame)' == 'true' And Exists('$(CopyOutputDLLPath2)')"/>
+        <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFolder="$(CopyOutputDLLPath3)" OverwriteReadOnlyFiles="true" Condition="'$(DeployToGame)' == 'true' And Exists('$(CopyOutputDLLPath3)')"/>
     </Target>
     <Target Name="CopyReadMeToTSFolder" AfterTargets="CopyOutputDLL" Condition=" ('$(Configuration)|$(Platform)' == 'Release|AnyCPU') And ('$(OS)' == 'Windows_NT') ">
         <Error Text="README.md not found in project directory." Condition="!Exists('$(ProjectDir)README.md')"/>

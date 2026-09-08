@@ -33,7 +33,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
     }
 
     internal const string ModName = "RepairRequiresMaterials";
-    internal const string ModVersion = "1.0.2";
+    internal const string ModVersion = "1.0.3";
     internal const string Author = "sighsorry";
     internal const string ModGuid = $"{Author}.{ModName}";
 
@@ -263,6 +263,9 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
             string.Empty,
             "Comma-separated exact prefab names that can never be dismantled, including otherwise eligible equipment and explicitly added items.",
             100);
+        DismantleBlacklist.SettingChanged += (_, _) =>
+            IncineratorDismantleCostSystem.SetBlacklistedPrefabs(DismantleBlacklist.Value);
+        IncineratorDismantleCostSystem.SetBlacklistedPrefabs(DismantleBlacklist.Value);
 
         AdminCommands.Register();
         _harmony.PatchAll(Assembly.GetExecutingAssembly());

@@ -75,7 +75,7 @@ internal static class RepairStripController
     private static Image? _wheelImage;
     private static RepairScrollHandler? _scrollHandler;
     private static Sprite? _wheelSprite;
-    private static bool _wheelLookupWarningLogged;
+    private static bool _wheelSpriteLookupFailed;
     private static int _lastVisualKey = int.MinValue;
 
     internal static void Refresh(InventoryGui gui)
@@ -100,7 +100,7 @@ internal static class RepairStripController
         }
 
         RefreshWheelSprite();
-        if (_skillFreeText != null)
+        if (preview.PaymentKind == RepairPaymentKind.CraftingSkillFree && _skillFreeText != null)
         {
             string localizedText = RepairRequiresMaterialsLocalization.Localize("$rrm_ui_free");
             if (!string.Equals(_skillFreeText.text, localizedText, StringComparison.Ordinal))
@@ -157,7 +157,7 @@ internal static class RepairStripController
         _wheelImage = null;
         _scrollHandler = null;
         _wheelSprite = null;
-        _wheelLookupWarningLogged = false;
+        _wheelSpriteLookupFailed = false;
         _lastVisualKey = int.MinValue;
         MaterialSlots.Clear();
     }
@@ -312,7 +312,7 @@ internal static class RepairStripController
             ?? FindRequirementAmountTemplate(gui);
         _skillFreeText = CreateOverlayText(template, _skillFreeRoot.transform, "FreeRepairLabel");
         float fontSize = _skillFreeText.fontSize > 0f ? _skillFreeText.fontSize : 16f;
-        _skillFreeText.text = RepairRequiresMaterialsLocalization.Localize("$rrm_ui_free");
+        _skillFreeText.text = string.Empty;
         _skillFreeText.alignment = TextAlignmentOptions.Center;
         _skillFreeText.enableAutoSizing = true;
         _skillFreeText.fontSizeMin = 10f;
@@ -568,6 +568,11 @@ internal static class RepairStripController
             return _wheelSprite;
         }
 
+        if (_wheelSpriteLookupFailed)
+        {
+            return null;
+        }
+
         GameObject? buildHints = KeyHints.instance?.m_buildHints;
         if (buildHints == null)
         {
@@ -584,12 +589,9 @@ internal static class RepairStripController
             }
         }
 
-        if (!_wheelLookupWarningLogged)
-        {
-            _wheelLookupWarningLogged = true;
-            RepairRequiresMaterialsPlugin.Log.LogWarning(
-                $"Valheim's '{VanillaWheelSpriteName}' sprite was not found; the mouse-wheel hint will be hidden.");
-        }
+        _wheelSpriteLookupFailed = true;
+        RepairRequiresMaterialsPlugin.Log.LogWarning(
+            $"Valheim's '{VanillaWheelSpriteName}' sprite was not found; the mouse-wheel hint will be hidden.");
 
         return null;
     }

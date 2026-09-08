@@ -138,6 +138,8 @@ internal static class IncineratorDismantleCostSystem
     private const decimal UInt64Range = 18446744073709551616m;
     private static volatile PrefabPatternMatcher _additionalDismantleablePrefabs =
         PrefabPatternMatcher.Empty;
+    private static volatile HashSet<string> _blacklistedPrefabs =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private sealed class RecipeMaterialAmount
     {
@@ -184,6 +186,25 @@ internal static class IncineratorDismantleCostSystem
     internal static void SetAdditionalDismantleablePrefabPatterns(string? patterns)
     {
         _additionalDismantleablePrefabs = PrefabPatternMatcher.Parse(patterns);
+    }
+
+    internal static void SetBlacklistedPrefabs(string? value)
+    {
+        HashSet<string> prefabs = new(StringComparer.OrdinalIgnoreCase);
+        string rawValue = value ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(rawValue))
+        {
+            foreach (string entry in rawValue.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string prefabName = CleanPrefabName(entry);
+                if (prefabName.Length > 0)
+                {
+                    prefabs.Add(prefabName);
+                }
+            }
+        }
+
+        _blacklistedPrefabs = prefabs;
     }
 
     internal static bool TryBuildPlan(
@@ -633,21 +654,7 @@ internal static class IncineratorDismantleCostSystem
 
     private static bool IsBlacklisted(string prefabName)
     {
-        string value = RepairRequiresMaterialsPlugin.DismantleBlacklist.Value;
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        foreach (string entry in value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (string.Equals(CleanPrefabName(entry), prefabName, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return prefabName.Length > 0 && _blacklistedPrefabs.Contains(prefabName);
     }
 
     private static bool TryGetDismantleCandidatePrefab(
