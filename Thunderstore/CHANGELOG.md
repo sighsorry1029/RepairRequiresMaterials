@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.5
+
+- Updated Crafting bonus patching and administrator command visibility for Valheim 1.0.12.
+- Excluded upgrader-only catalysts such as Battle and Protection Idols from repair costs and incinerator dismantling returns.
+
+## 1.0.4
+
+- Updated console commands and Crafting bonus handling for Valheim 1.0.7.
+- Updated the bundled ServerSync implementation for Valheim 1.0.7 networking and administrator checks.
+
 ## 1.0.3
 
 - Moved the extended Crafting skill tooltip beside the Skills panel with safe-area positioning, gamepad support, and localized UI compatibility.

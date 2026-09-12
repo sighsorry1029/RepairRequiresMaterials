@@ -33,7 +33,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
     }
 
     internal const string ModName = "RepairRequiresMaterials";
-    internal const string ModVersion = "1.0.3";
+    internal const string ModVersion = "1.0.5";
     internal const string Author = "sighsorry";
     internal const string ModGuid = $"{Author}.{ModName}";
 
@@ -132,7 +132,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
             "Comma-, semicolon-, or newline-separated ingredient prefab names that are excluded from repair material costs. "
             + "A '*' matches any number of characters and each pattern must match the whole prefab name. "
             + "For example, 'Iron' excludes only Iron, while 'Simple_*_Socket' also matches Simple_Red_Socket. "
-            + "Matching is case-insensitive; equipment and Trophy item types are always excluded separately.",
+            + "Matching is case-insensitive; equipment, Trophy item types, and upgrader-only catalysts such as Idols are always excluded separately.",
             100);
         RepairMaterialBlacklist.SettingChanged += (_, _) =>
         {

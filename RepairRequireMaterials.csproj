@@ -67,14 +67,14 @@
         <Reference Include="0Harmony">
             <HintPath>$(BepInExPath)\core\0Harmony.dll</HintPath>
         </Reference>
-        <Reference Include="assembly_guiutils">
-            <HintPath>$(PublicizedAssembliesPath)\assembly_guiutils_publicized.dll</HintPath>
+        <Reference Include="assembly_guiutils" Publicize="true">
+            <HintPath>$(CorlibPath)\assembly_guiutils.dll</HintPath>
         </Reference>
         <Reference Include="assembly_utils">
-            <HintPath>$(PublicizedAssembliesPath)\assembly_utils_publicized.dll</HintPath>
+            <HintPath>$(CorlibPath)\assembly_utils.dll</HintPath>
         </Reference>
-        <Reference Include="assembly_valheim">
-            <HintPath>$(PublicizedAssembliesPath)\assembly_valheim_publicized.dll</HintPath>
+        <Reference Include="assembly_valheim" Publicize="true">
+            <HintPath>$(CorlibPath)\assembly_valheim.dll</HintPath>
         </Reference>
         <Reference Include="BepInEx">
             <HintPath>$(BepInExPath)\core\BepInEx.dll</HintPath>
@@ -159,6 +159,7 @@
         <PackageReference Include="YamlDotNet" Version="16.3.0" GeneratePathProperty="true">
           <PrivateAssets>all</PrivateAssets>
         </PackageReference>
+        <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.2" PrivateAssets="all" ExcludeAssets="build" GeneratePathProperty="true"/>
     </ItemGroup>
     <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets"/>
     <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
@@ -238,6 +239,27 @@
         <Copy SourceFiles="@(NexusPackageFiles)" DestinationFolder="$(PackageDir)"/>
         <ZipDirectory SourceDirectory="$(PackageDir)" DestinationFile="Nexus\$(PackageName).zip" Overwrite="true"/>
         <RemoveDir Directories="$(PackageDir)"/>
+    </Target>
+
+    <!-- Compile against freshly publicized copies of the installed original game
+         assemblies and emit the matching runtime access-check attributes. -->
+    <PropertyGroup>
+        <PublicizerTaskFramework Condition="'$(MSBuildRuntimeType)' == 'Core'">netstandard2.1</PublicizerTaskFramework>
+        <PublicizerTaskFramework Condition="'$(MSBuildRuntimeType)' != 'Core'">net472</PublicizerTaskFramework>
+    </PropertyGroup>
+    <UsingTask TaskName="PublicizeTask" AssemblyFile="$(PkgBepInEx_AssemblyPublicizer_MSBuild)\lib\$(PublicizerTaskFramework)\BepInEx.AssemblyPublicizer.MSBuild.dll"/>
+    <Target Name="PrepareGameCompileReferences" AfterTargets="ResolveReferences" BeforeTargets="CoreCompile">
+        <PublicizeTask IntermediateOutputPath="$(IntermediateOutputPath)" GeneratedIgnoresAccessChecksToFile="$(IntermediateOutputPath)RepairRequiresMaterials.IgnoresAccessChecksTo.cs" ReferencePath="@(ReferencePath)" PackageReference="@(PackageReference)" Publicize="@(Publicize)">
+            <Output TaskParameter="RemovedReferences" ItemName="RepairRequiresMaterialsRemovedReferences"/>
+            <Output TaskParameter="PublicizedReferences" ItemName="RepairRequiresMaterialsPublicizedReferences"/>
+        </PublicizeTask>
+        <ItemGroup>
+            <ReferencePath Remove="@(RepairRequiresMaterialsRemovedReferences)"/>
+            <ReferencePath Include="@(RepairRequiresMaterialsPublicizedReferences)"/>
+            <Compile Include="$(IntermediateOutputPath)RepairRequiresMaterials.IgnoresAccessChecksTo.cs"/>
+            <Compile Include="$(PkgBepInEx_AssemblyPublicizer_MSBuild)\contentFiles\cs\any\IgnoresAccessChecksToAttribute.cs"/>
+            <FileWrites Include="$(IntermediateOutputPath)RepairRequiresMaterials.IgnoresAccessChecksTo.cs"/>
+        </ItemGroup>
     </Target>
 
 </Project>

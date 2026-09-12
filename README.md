@@ -67,7 +67,7 @@ For an upgrade-only recipe with no crafting material cost, the first upgrade amo
 
 Durability uses 10% buckets; for example, 51-60% remaining durability counts as 40% missing. Fractional costs use stochastic rounding: `0.1` costs one item with a 10% chance, while `1.8` always costs one and has an 80% chance to cost a second. The fractional roll stays fixed for that item and repair cycle, so reopening the UI cannot reroll it; the required amount can still change when the cost itself changes.
 
-Equipment and Trophy ingredients are excluded from repair costs. Ammunition remains valid unless `Repair Material Blacklist` excludes it. If no eligible exact recipe retains an allowed ingredient, that equipment is omitted from the repair list. Recipe-less equipment that another mod explicitly makes repairable, such as Homestead's Dvergr circlet, instead follows that mod's station rule and has no material cost. Successful repairs keep Valheim's durability-based Crafting experience.
+Equipment, Trophy ingredients, and upgrader-only catalysts such as Battle and Protection Idols are excluded from repair costs. Upgrader-only catalysts are also never returned by incinerator dismantling. Ammunition remains valid unless `Repair Material Blacklist` excludes it. If no eligible exact recipe retains an allowed ingredient, that equipment is omitted from the repair list. Recipe-less equipment that another mod explicitly makes repairable, such as Homestead's Dvergr circlet, instead follows that mod's station rule and has no material cost. Successful repairs keep Valheim's durability-based Crafting experience.
 
 ## Crafting Skill Effects
 

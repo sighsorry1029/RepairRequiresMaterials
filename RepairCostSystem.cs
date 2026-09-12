@@ -373,6 +373,7 @@ internal static class RepairCostSystem
         foreach (Piece.Requirement requirement in recipeResources)
         {
             if (requirement?.m_resItem == null
+                || requirement.m_upgraderResource
                 || (GetBaseRepairAmount(requirement, useFirstUpgradeAsBase) <= 0
                     && GetQualityIncrementRecipeAmount(requirement, item.m_quality) <= 0))
             {
@@ -422,7 +423,7 @@ internal static class RepairCostSystem
 
         foreach (Piece.Requirement requirement in recipeResources)
         {
-            if (requirement?.m_resItem == null)
+            if (requirement?.m_resItem == null || requirement.m_upgraderResource)
             {
                 continue;
             }
@@ -599,7 +600,10 @@ internal static class RepairCostSystem
 
     private static bool HasBaseRecipeCost(IEnumerable<Piece.Requirement> requirements)
     {
-        return requirements.Any(requirement => requirement?.m_resItem != null && requirement.GetAmount(1) > 0);
+        return requirements.Any(requirement =>
+            requirement?.m_resItem != null
+            && !requirement.m_upgraderResource
+            && requirement.GetAmount(1) > 0);
     }
 
     private static long GetBaseRepairAmount(Piece.Requirement requirement, bool useFirstUpgradeAsBase)

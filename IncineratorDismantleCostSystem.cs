@@ -521,7 +521,19 @@ internal static class IncineratorDismantleCostSystem
 
         foreach (Piece.Requirement requirement in recipe.m_resources ?? Array.Empty<Piece.Requirement>())
         {
-            if (requirement == null || requirement.m_resItem == null)
+            if (requirement == null)
+            {
+                return false;
+            }
+
+            // Valheim 1.0 marks upgrade-station catalysts such as Battle and
+            // Protection Idols separately from ordinary recipe materials.
+            if (requirement.m_upgraderResource)
+            {
+                continue;
+            }
+
+            if (requirement.m_resItem == null)
             {
                 return false;
             }

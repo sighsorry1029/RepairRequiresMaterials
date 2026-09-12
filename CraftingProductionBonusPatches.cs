@@ -240,7 +240,7 @@ internal static class InventoryGuiCraftingProductionBonusPatch
 
         int getAmountCallIndex = FindCall(codes, GetAmountMethod, 0);
         int stationCallIndex = FindCall(codes, GetCurrentCraftingStationMethod, 0);
-        if (getAmountCallIndex < 0 || stationCallIndex < 0 || getAmountCallIndex >= stationCallIndex)
+        if (getAmountCallIndex < 0 || stationCallIndex < 0)
         {
             failure = "could not locate Recipe.GetAmount and GetCurrentCraftingStation anchors";
             return false;
@@ -254,14 +254,29 @@ internal static class InventoryGuiCraftingProductionBonusPatch
         }
 
         int stationStoreIndex = stationCallIndex + 1;
-        int bonusZeroIndex = stationCallIndex + 2;
-        int bonusStoreIndex = stationCallIndex + 3;
-        int insertionIndex = stationCallIndex + 4;
-        if (insertionIndex >= codes.Count
-            || !TryGetStoredLocal(codes[stationStoreIndex], out int stationLocal)
-            || !IsLoadConstantZero(codes[bonusZeroIndex])
-            || !TryGetStoredLocal(codes[bonusStoreIndex], out int bonusLocal)
-            || !LoadsLocal(codes[insertionIndex], stationLocal))
+        if (stationStoreIndex >= codes.Count
+            || !TryGetStoredLocal(codes[stationStoreIndex], out int stationLocal))
+        {
+            failure = "could not resolve the current crafting station local";
+            return false;
+        }
+
+        int bonusSearchStart = Math.Max(getAmountCallIndex + 2, stationStoreIndex + 1);
+        int randomValueIndex = FindCall(codes, RandomValueGetter, bonusSearchStart);
+        if (randomValueIndex < 0
+            || !TryFindZeroInitializedLocal(
+                codes,
+                bonusSearchStart,
+                randomValueIndex,
+                out int bonusStoreIndex,
+                out int bonusLocal))
+        {
+            failure = "could not resolve the vanilla crafting-bonus accumulator";
+            return false;
+        }
+
+        int insertionIndex = FindLocalLoad(codes, stationLocal, bonusStoreIndex + 1, randomValueIndex);
+        if (insertionIndex < 0)
         {
             failure = "the vanilla crafting-bonus entry pattern changed";
             return false;
@@ -269,7 +284,6 @@ internal static class InventoryGuiCraftingProductionBonusPatch
 
         int bonusChanceIndex = FindFieldLoad(codes, CraftBonusChanceField, insertionIndex);
         int bonusAmountIndex = FindFieldLoad(codes, CraftBonusAmountField, insertionIndex);
-        int randomValueIndex = FindCall(codes, RandomValueGetter, insertionIndex);
         if (randomValueIndex <= insertionIndex
             || bonusChanceIndex <= randomValueIndex
             || bonusAmountIndex <= bonusChanceIndex)
@@ -382,6 +396,48 @@ internal static class InventoryGuiCraftingProductionBonusPatch
         {
             if ((codes[i].opcode == OpCodes.Ldfld || codes[i].opcode == OpCodes.Ldsfld)
                 && Equals(codes[i].operand, field))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static bool TryFindZeroInitializedLocal(
+        List<CodeInstruction> codes,
+        int startIndex,
+        int endIndex,
+        out int storeIndex,
+        out int localIndex)
+    {
+        storeIndex = -1;
+        localIndex = -1;
+        for (int i = Math.Max(0, startIndex); i + 1 < Math.Min(endIndex, codes.Count); i++)
+        {
+            if (!IsLoadConstantZero(codes[i])
+                || !TryGetStoredLocal(codes[i + 1], out int candidateLocal))
+            {
+                continue;
+            }
+
+            storeIndex = i + 1;
+            localIndex = candidateLocal;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static int FindLocalLoad(
+        List<CodeInstruction> codes,
+        int localIndex,
+        int startIndex,
+        int endIndex)
+    {
+        for (int i = Math.Max(0, startIndex); i < Math.Min(endIndex, codes.Count); i++)
+        {
+            if (LoadsLocal(codes[i], localIndex))
             {
                 return i;
             }

@@ -41,6 +41,7 @@ internal static class AdminCommands
             onlyServer: false,
             isSecret: false,
             allowInDevBuild: false,
+            hideBehindDevCommands: false,
             optionsFetcher: GetDurabilityOptions,
             alwaysRefreshTabOptions: false,
             remoteCommand: false,
