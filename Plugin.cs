@@ -33,7 +33,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
     }
 
     internal const string ModName = "RepairRequiresMaterials";
-    internal const string ModVersion = "1.0.5";
+    internal const string ModVersion = "1.0.6";
     internal const string Author = "sighsorry";
     internal const string ModGuid = $"{Author}.{ModName}";
 
@@ -59,6 +59,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
     internal static readonly ManualLogSource Log = BepInEx.Logging.Logger.CreateLogSource(ModName);
 
     internal static ConfigEntry<Toggle> ServerConfigLocked = null!;
+    internal static ConfigEntry<Toggle> AllowEquipmentChangesWhileRunning = null!;
     internal static ConfigEntry<float> BaseMaterialCostPercent = null!;
     internal static ConfigEntry<float> QualityIncrementMaterialCostPercent = null!;
     internal static ConfigEntry<string> RepairMaterialBlacklist = null!;
@@ -106,6 +107,13 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
             "If on, the configuration is locked and can be changed by server admins only.",
             100);
         _ = ConfigSync.AddLockingConfigEntry(ServerConfigLocked);
+
+        AllowEquipmentChangesWhileRunning = config(
+            GeneralConfig,
+            "Allow Equipment Changes While Running",
+            Toggle.On,
+            "If on, queued equipment equip and manual unequip actions take priority over sprint. Sprint pauses while the vanilla action completes and resumes while Run input remains active. Jump and dodge still cancel the action.",
+            200);
 
         BaseMaterialCostPercent = config(
             RepairCostsConfig,

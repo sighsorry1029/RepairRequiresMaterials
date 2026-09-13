@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.6
+
+- Added the server-synchronized `Allow Equipment Changes While Running` option, enabled by default. Queued equip and manual unequip actions now temporarily suspend sprint so Valheim's original action time and animation can complete, then resume held or toggled Run input.
+
 ## 1.0.5
 
 - Updated Crafting bonus patching and administrator command visibility for Valheim 1.0.12.

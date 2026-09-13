@@ -182,3 +182,50 @@ internal static class PlayerCraftingEquipSpeedPatch
             $"Crafting equip-time reduction was not fully applied because Player.{methodName} was not found.");
     }
 }
+
+[HarmonyPatch]
+internal static class PlayerEquipmentActionSprintPatch
+{
+    private static bool _missingTargetWarningLogged;
+
+    private static IEnumerable<MethodBase> TargetMethods()
+    {
+        MethodBase? checkRunMethod = AccessTools.DeclaredMethod(
+            typeof(Player),
+            "CheckRun",
+            new[] { typeof(Vector3), typeof(float) });
+        if (checkRunMethod != null)
+        {
+            yield return checkRunMethod;
+        }
+        else if (!_missingTargetWarningLogged)
+        {
+            _missingTargetWarningLogged = true;
+            RepairRequiresMaterialsPlugin.Log.LogWarning(
+                "Equipment changes while running were not enabled because Player.CheckRun was not found.");
+        }
+    }
+
+    [HarmonyPrefix]
+    [HarmonyPriority(Priority.Last)]
+    private static bool Prefix(Player __instance, ref bool __result)
+    {
+        if ((UnityObject)(object)__instance == null
+            || !ReferenceEquals(__instance, Player.m_localPlayer)
+            || !RepairRequiresMaterialsPlugin.AllowEquipmentChangesWhileRunning.Value.IsOn())
+        {
+            return true;
+        }
+
+        __instance.GetActionProgress(out _, out _, out Player.MinorActionData action);
+        if (action == null
+            || (action.m_type != Player.MinorActionData.ActionType.Equip
+                && action.m_type != Player.MinorActionData.ActionType.Unequip))
+        {
+            return true;
+        }
+
+        __result = false;
+        return false;
+    }
+}

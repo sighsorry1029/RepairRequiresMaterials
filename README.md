@@ -39,6 +39,7 @@ Hold the configured modifier and use the incinerator to dismantle items while or
 - Repairs equipment with materials from its exact crafting recipe.
 - Keeps the vanilla repair button and adds a compact material strip with subtle per-slot backgrounds.
 - Uses Crafting skill for free repairs, bonus output, and faster equipment changes.
+- Lets queued equipment changes temporarily interrupt sprint instead of being discarded.
 - Pulls missing repair materials from permitted AzuCraftyBoxes containers when available.
 - Dismantles equipment and explicitly allowed items in an incinerator without replacing normal incineration.
 - Includes English and Korean UI text.
@@ -85,6 +86,8 @@ Outputs matched by `Bonus Output Excluded Prefabs` receive neither this mod's bo
 
 Equipment equip and manual unequip times decrease linearly with Crafting skill. The default setting reaches a 50% reduction at level 100. The current effects are also summarized in the in-game Crafting skill tooltip.
 
+`Allow Equipment Changes While Running` defaults to on and is synchronized by the server. Starting an equipment equip or manual unequip action while sprinting temporarily suspends sprint so Valheim's original action time and animation can complete. Movement remains available, and held or toggled Run resumes after the action. Jumping and dodging keep their vanilla behavior and cancel the queued action.
+
 ## Incinerator
 
 `Incinerator Build Recipe` changes the materials required to construct the vanilla incinerator. Its default is the vanilla `Iron:8,Copper:4,Thunderstone:1` recipe.
@@ -109,6 +112,7 @@ Additional stackable items are scaled by their source stack and recipe output am
 | Section | Setting | Default | Range |
 |---|---|---:|---:|
 | `1 - General` | `Lock Configuration` | `On` | - |
+|  | `Allow Equipment Changes While Running` | `On` | - |
 | `2 - Repair Costs` | `Base Material Cost Percent` | `15%` | `0-100%` |
 |  | `Quality Increment Material Cost Percent` | `5%` | `0-100%` |
 |  | `Repair Material Blacklist` | empty | - |
