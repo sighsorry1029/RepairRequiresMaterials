@@ -90,7 +90,9 @@ Equipment equip and manual unequip times decrease linearly with Crafting skill. 
 
 ## Incinerator
 
-`Incinerator Build Recipe` changes the materials required to construct the vanilla incinerator. Its default is the vanilla `Iron:8,Copper:4,Thunderstone:1` recipe.
+`Incinerator Build Recipe` changes the materials required to construct the vanilla incinerator. Its default is `Tin:8,Copper:4,Bronze:2,Thunderstone:1`. The vanilla recipe is `Iron:8,Copper:4,Thunderstone:1`.
+
+`Thunderstone Required Global Key` defaults to `defeated_eikthyr`, allowing Haldor to sell Thunderstone after Eikthyr. Set it to `defeated_gdking` for The Elder requirement, or leave it empty to preserve the original trader requirement. Changes apply on the next trader inventory refresh. This setting also works when dismantling is disabled.
 
 Put items in a vanilla incinerator, hold `Modifier Key` (default `LeftAlt`), and press the current Valheim Use binding. This dismantles every eligible item currently inside, including the full stack of any matched stackable item. Ordinary Use is unchanged.
 
@@ -122,7 +124,8 @@ Additional stackable items are scaled by their source stack and recipe output am
 |  | `Bonus Output Chance At Level 100` | `25%` | `0-25%` |
 |  | `Bonus Output Excluded Prefabs` | `Simple_*_Socket, Advanced_*_Socket, Perfect_*_Socket` | - |
 |  | `Equip Time Reduction At Level 100` | `50%` | `0-100%` |
-| `4 - Incinerator Dismantling` | `Incinerator Build Recipe` | `Iron:8,Copper:4,Thunderstone:1` | - |
+| `4 - Incinerator Dismantling` | `Incinerator Build Recipe` | `Tin:8,Copper:4,Bronze:2,Thunderstone:1` | - |
+|  | `Thunderstone Required Global Key` | `defeated_eikthyr` | - |
 |  | `Enabled` | `On` | - |
 |  | `Modifier Key` | `LeftAlt` | - |
 |  | `Base Material Return Percent` | `10%` | `0-100%` |

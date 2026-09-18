@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.7
+
+- Added the server-synchronized `Thunderstone Required Global Key` setting, defaulting to `defeated_eikthyr` so traders sell Thunderstone after Eikthyr instead of The Elder. Leave it empty to preserve the original requirement.
+- Changed the default incinerator build recipe to `Tin:8,Copper:4,Bronze:2,Thunderstone:1` and documented the vanilla recipe in the config description. Existing saved recipe settings are preserved.
+
 ## 1.0.6
 
 - Added the server-synchronized `Allow Equipment Changes While Running` option, enabled by default. Queued equip and manual unequip actions now temporarily suspend sprint so Valheim's original action time and animation can complete, then resume held or toggled Run input.

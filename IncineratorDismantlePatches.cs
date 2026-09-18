@@ -7,6 +7,67 @@ using UnityEngine;
 
 namespace RepairRequiresMaterials;
 
+[HarmonyPatch(typeof(Trader), nameof(Trader.GetAvailableItems))]
+internal static class ThunderstoneTraderUnlockPatch
+{
+    private static readonly Dictionary<Trader.TradeItem, TradeItemState> ModifiedItems = new();
+
+    private static void Prefix(Trader __instance)
+    {
+        string key = RepairRequiresMaterialsPlugin.ThunderstoneRequiredGlobalKey.Value?.Trim() ?? string.Empty;
+        if (key.Length == 0)
+        {
+            Restore();
+            return;
+        }
+
+        if (__instance == null || __instance.m_items == null)
+        {
+            return;
+        }
+
+        foreach (Trader.TradeItem item in __instance.m_items)
+        {
+            if (item?.m_prefab == null
+                || !string.Equals(Utils.GetPrefabName(item.m_prefab.gameObject), "Thunderstone", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (!ModifiedItems.TryGetValue(item, out TradeItemState? state))
+            {
+                state = new TradeItemState(item.m_requiredGlobalKey);
+                ModifiedItems.Add(item, state);
+            }
+
+            state.AppliedKey = key;
+            item.m_requiredGlobalKey = key;
+        }
+    }
+
+    internal static void Restore()
+    {
+        foreach (KeyValuePair<Trader.TradeItem, TradeItemState> entry in ModifiedItems)
+        {
+            // Preserve a later override made by another mod.
+            if (string.Equals(entry.Key.m_requiredGlobalKey, entry.Value.AppliedKey, StringComparison.Ordinal))
+            {
+                entry.Key.m_requiredGlobalKey = entry.Value.OriginalKey;
+            }
+        }
+
+        ModifiedItems.Clear();
+    }
+
+    private sealed class TradeItemState
+    {
+        internal TradeItemState(string originalKey) => OriginalKey = originalKey;
+
+        internal readonly string OriginalKey;
+        internal string AppliedKey = string.Empty;
+    }
+}
+
 [HarmonyPatch]
 internal static class IncineratorBuildRecipeLifecyclePatch
 {
@@ -25,7 +86,7 @@ internal static class IncineratorBuildRecipeLifecyclePatch
 
 internal static class IncineratorBuildRecipeSystem
 {
-    internal const string DefaultRecipe = "Iron:8,Copper:4,Thunderstone:1";
+    internal const string DefaultRecipe = "Tin:8,Copper:4,Bronze:2,Thunderstone:1";
 
     private const string IncineratorPrefabName = "incinerator";
     private static Piece? _trackedPiece;

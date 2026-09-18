@@ -33,7 +33,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
     }
 
     internal const string ModName = "RepairRequiresMaterials";
-    internal const string ModVersion = "1.0.6";
+    internal const string ModVersion = "1.0.7";
     internal const string Author = "sighsorry";
     internal const string ModGuid = $"{Author}.{ModName}";
 
@@ -74,6 +74,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
     internal static ConfigEntry<float> DismantleBaseReturnPercent = null!;
     internal static ConfigEntry<float> DismantleUpgradeReturnPercent = null!;
     internal static ConfigEntry<string> IncineratorBuildRecipe = null!;
+    internal static ConfigEntry<string> ThunderstoneRequiredGlobalKey = null!;
     internal static ConfigEntry<string> AdditionalDismantleableItems = null!;
     internal static ConfigEntry<string> DismantleBlacklist = null!;
 
@@ -243,12 +244,21 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
             IncineratorDismantlingConfig,
             "Incinerator Build Recipe",
             IncineratorBuildRecipeSystem.DefaultRecipe,
-            "Materials required to build the vanilla incinerator. Use comma-, semicolon-, or newline-separated "
-            + "ItemPrefab:Amount entries, for example 'Iron:8,Copper:4,Thunderstone:1'. "
+            "Materials required to build the vanilla incinerator. Vanilla recipe: 'Iron:8,Copper:4,Thunderstone:1'. "
+            + "Use comma-, semicolon-, or newline-separated ItemPrefab:Amount entries. "
             + "Amounts must be positive integers and item prefab names are exact. Leave empty to restore the original build recipe, "
             + "or use 'None' for no build cost. This does not change normal incineration conversions or dismantling returns.",
             700);
         IncineratorBuildRecipe.SettingChanged += (_, _) => IncineratorBuildRecipeSystem.Apply();
+
+        ThunderstoneRequiredGlobalKey = config(
+            IncineratorDismantlingConfig,
+            "Thunderstone Required Global Key",
+            "defeated_eikthyr",
+            "Global key required for traders to sell Thunderstone. Vanilla uses defeated_gdking (The Elder); "
+            + "the default defeated_eikthyr unlocks it after Eikthyr. Leave empty to preserve the original trader requirement. "
+            + "Changes apply when the trader's available items are next refreshed, independently of dismantling being enabled.",
+            650);
 
         AdditionalDismantleableItems = config(
             IncineratorDismantlingConfig,
@@ -302,6 +312,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
                 }
                 finally
                 {
+                    ThunderstoneTraderUnlockPatch.Restore();
                     RepairRequiresMaterialsLocalization.Shutdown();
                 }
             }
