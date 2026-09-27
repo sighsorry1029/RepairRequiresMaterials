@@ -161,7 +161,11 @@ internal static class RepairCostSystem
         }
     }
 
-    internal static bool TryGetRepairPreview(Player player, ItemDrop.ItemData item, out RepairPreview? preview)
+    internal static bool TryGetRepairPreview(
+        Player player,
+        ItemDrop.ItemData item,
+        out RepairPreview? preview,
+        bool atGalleonAnvil = false)
     {
         preview = null;
         if (!CanRepairStructurally(player, item))
@@ -181,15 +185,16 @@ internal static class RepairCostSystem
         }
 
         CraftingStation? station = player.GetCurrentCraftingStation();
-        if (station == null)
+        if (station == null && !atGalleonAnvil)
         {
             return false;
         }
 
-        Recipe? recipe = FindStationRepairRecipe(player, item, station);
+        Recipe? recipe = FindRepairRecipe(player, item, station, atGalleonAnvil);
         if (recipe == null)
         {
-            if (!CanUseExternalStationRepair(player, item, station))
+            // A ship anvil cannot provide a price for recipe-less equipment.
+            if (atGalleonAnvil || station == null || !CanUseExternalStationRepair(player, item, station))
             {
                 return false;
             }
@@ -203,7 +208,7 @@ internal static class RepairCostSystem
             return true;
         }
 
-        RepairPreview? stationPreview = BuildStationPreview(player, item, recipe);
+        RepairPreview? stationPreview = BuildMaterialPreview(player, item, recipe);
         if (stationPreview == null)
         {
             return false;
@@ -289,7 +294,7 @@ internal static class RepairCostSystem
         }
 
         return station != null
-               && (FindStationRepairRecipe(player, item, station) != null
+               && (FindRepairRecipe(player, item, station) != null
                    || CanUseExternalStationRepair(player, item, station));
     }
 
@@ -310,10 +315,11 @@ internal static class RepairCostSystem
         return (Object)(object)gui != null && gui.CanRepair(item);
     }
 
-    private static Recipe? FindStationRepairRecipe(
+    private static Recipe? FindRepairRecipe(
         Player player,
         ItemDrop.ItemData item,
-        CraftingStation station)
+        CraftingStation? station,
+        bool atGalleonAnvil = false)
     {
         IReadOnlyList<Recipe> exactRecipes = RepairRecipeCatalog.GetRecipes(item);
         bool hasEnabledExactRecipe = false;
@@ -327,7 +333,7 @@ internal static class RepairCostSystem
 
             hasEnabledExactRecipe = true;
             if (CanUseMaterialRepairRecipe(item, recipe)
-                && CanRepairAtStation(player, item, station, recipe))
+                && (atGalleonAnvil || CanRepairAtStation(player, item, station, recipe)))
             {
                 return recipe;
             }
@@ -340,7 +346,7 @@ internal static class RepairCostSystem
                 if (recipe != null
                     && !recipe.m_enabled
                     && CanUseMaterialRepairRecipe(item, recipe)
-                    && CanRepairAtStation(player, item, station, recipe))
+                    && (atGalleonAnvil || CanRepairAtStation(player, item, station, recipe)))
                 {
                     return recipe;
                 }
@@ -354,7 +360,7 @@ internal static class RepairCostSystem
             Recipe? fallback = ObjectDB.instance.GetRecipe(item);
             if (fallback != null
                 && CanUseMaterialRepairRecipe(item, fallback)
-                && CanRepairAtStation(player, item, station, fallback))
+                && (atGalleonAnvil || CanRepairAtStation(player, item, station, fallback)))
             {
                 return fallback;
             }
@@ -400,13 +406,14 @@ internal static class RepairCostSystem
         return hasAllowedMaterial;
     }
 
-    private static RepairPreview? BuildStationPreview(
+    private static RepairPreview? BuildMaterialPreview(
         Player player,
         ItemDrop.ItemData item,
         Recipe recipe)
     {
         int bucketPercent = GetDurabilityBucketPercent(item);
-        int missingDurabilityPercent = 100 - bucketPercent;
+        double missingDurabilityPercent = GetChargeableDamagePercent(item, bucketPercent);
+        bool minimumOneMaterial = RepairRequiresMaterialsPlugin.MinimumOneMaterialPerRepair.Value.IsOn();
         double baseMaterialPercent = Mathf.Clamp(
             RepairRequiresMaterialsPlugin.BaseMaterialCostPercent.Value,
             0f,
@@ -506,6 +513,11 @@ internal static class RepairCostSystem
             int requiredAmount = hasRawCost
                 ? roundingContext!.Round(rawRepairAmount, roundingKey)
                 : 0;
+            if (hasRawCost && minimumOneMaterial)
+            {
+                requiredAmount = Math.Max(1, requiredAmount);
+            }
+
             if (requiredAmount <= 0)
             {
                 if (recipe.m_requireOnlyOneIngredient)
@@ -630,7 +642,7 @@ internal static class RepairCostSystem
         long qualityIncrementRecipeAmount,
         double baseMaterialPercent,
         double qualityIncrementMaterialPercent,
-        int missingDurabilityPercent)
+        double missingDurabilityPercent)
     {
         if (missingDurabilityPercent <= 0
             || ((baseRecipeAmount <= 0 || baseMaterialPercent <= 0d)
@@ -648,6 +660,29 @@ internal static class RepairCostSystem
         }
 
         return scaledRepairAmount;
+    }
+
+    private static double GetChargeableDamagePercent(ItemDrop.ItemData item, int durabilityBucketPercent)
+    {
+        float maxDurability = item.GetMaxDurability();
+        if (maxDurability <= 0f)
+        {
+            return 0d;
+        }
+
+        double damagePercent = Math.Max(0d, Math.Min(100d,
+            (maxDurability - (double)item.m_durability) * 100d / maxDurability));
+        float threshold = Mathf.Clamp(
+            RepairRequiresMaterialsPlugin.FreeRepairDamageThresholdPercent.Value, 0f, 100f);
+        if (damagePercent < threshold)
+        {
+            return 0d;
+        }
+
+        int bucketDamagePercent = 100 - durabilityBucketPercent;
+        // Preserve existing paid costs. Only a lowered free threshold can expose
+        // sub-10% damage, which must not silently remain free through bucket zero.
+        return bucketDamagePercent > 0 ? bucketDamagePercent : damagePercent;
     }
 
     private static int GetDurabilityBucketPercent(ItemDrop.ItemData item)

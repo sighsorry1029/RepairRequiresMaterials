@@ -68,6 +68,10 @@ For an upgrade-only recipe with no crafting material cost, the first upgrade amo
 
 Durability uses 10% buckets; for example, 51-60% remaining durability counts as 40% missing. Fractional costs use stochastic rounding: `0.1` costs one item with a 10% chance, while `1.8` always costs one and has an 80% chance to cost a second. The fractional roll stays fixed for that item and repair cycle, so reopening the UI cannot reroll it; the required amount can still change when the cost itself changes.
 
+`Free Repair Damage Threshold Percent` defaults to `10`: damage strictly below the threshold has no material cost. At the threshold, normal costs apply without subtracting the free band. For example, `20` makes damage below 20% free, while 37% damage still uses the existing 30% cost bucket. `0` disables the free band; `100` applies costs only to fully broken items. If a lower threshold allows damage below 10%, that damage uses its exact percentage instead of the zero bucket.
+
+`Minimum One Material Per Repair` defaults to `Off`. Enable it to prevent each positive fractional material cost from rounding down to zero. It does not charge for the free damage band, excluded materials, or zero-cost settings, and does not replace stochastic rounding with always rounding up. Crafting-skill free repairs still apply, and an either/or recipe still uses only one ingredient.
+
 Equipment, Trophy ingredients, and upgrader-only catalysts such as Battle and Protection Idols are excluded from repair costs. Upgrader-only catalysts are also never returned by incinerator dismantling. Ammunition remains valid unless `Repair Material Blacklist` excludes it. If no eligible exact recipe retains an allowed ingredient, that equipment is omitted from the repair list. Recipe-less equipment that another mod explicitly makes repairable, such as Homestead's Dvergr circlet, instead follows that mod's station rule and has no material cost. Successful repairs keep Valheim's durability-based Crafting experience.
 
 ## Crafting Skill Effects
@@ -117,6 +121,8 @@ Additional stackable items are scaled by their source stack and recipe output am
 |  | `Allow Equipment Changes While Running` | `On` | - |
 | `2 - Repair Costs` | `Base Material Cost Percent` | `15%` | `0-100%` |
 |  | `Quality Increment Material Cost Percent` | `5%` | `0-100%` |
+|  | `Free Repair Damage Threshold Percent` | `10%` | `0-100%` |
+|  | `Minimum One Material Per Repair` | `Off` | - |
 |  | `Repair Material Blacklist` | empty | - |
 | `3 - Crafting Skill Effects` | `Enable Free Repairs` | `On` | - |
 |  | `Free Repair Chance At Level 0` | `10%` | `0-100%` |
@@ -140,6 +146,12 @@ Gameplay settings are synchronized through ServerSync. `Modifier Key` is local t
 `Incinerator Build Recipe` accepts comma, semicolon, or newline-separated exact `ItemPrefab:Amount` entries. Leave it empty to restore the original recipe, or use `None` for no build cost. Invalid definitions restore the original recipe. This setting does not alter normal incineration conversions or Alt+Use dismantling returns.
 
 AzuCraftyBoxes container use and known-recipe dismantling are always enabled when applicable; they have no separate settings.
+
+## Artisan Mastery Compatibility
+
+When Artisan Mastery is installed, the Galleon's anvil repairs inventory items using RRM's material costs instead of unconditional free repairs. The installed, active anvil acts as a special repair facility without requiring a crafting station type or level; normal workbench repairs keep their station requirements.
+
+Each item uses the usual quality and durability costs, material exclusions, stable rounding, Crafting free-repair tickets and experience, and optional AzuCraftyBoxes materials. Items without an eligible material recipe or enough materials are skipped, and a summary shows how many were repaired and skipped. Existing free-repair settings still apply. The anvil's cooldown and effects are retained; ship-hull repair kits and passive hull regeneration are unaffected.
 
 ## Admin Command
 

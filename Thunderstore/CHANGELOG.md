@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.8
+
+- Added optional Artisan Mastery compatibility: Galleon anvils now use RRM material costs, Crafting free repairs, and nearby AzuCraftyBoxes materials. Items without enough materials or an eligible recipe are skipped with a repair summary. Ship-hull repairs remain unchanged.
+- Added the server-synchronized `Free Repair Damage Threshold Percent` setting (default `10`) to control the free repair damage range without changing the existing paid cost buckets.
+- Added the server-synchronized `Minimum One Material Per Repair` option (default `Off`) to keep positive material costs from rounding to zero while preserving the free damage range, material exclusions, and Crafting free repairs.
+- Updated the BepInEx package dependency to `5.4.2351`.
+
 ## 1.0.7
 
 - Added the server-synchronized `Thunderstone Required Global Key` setting, defaulting to `defeated_eikthyr` so traders sell Thunderstone after Eikthyr instead of The Elder. Leave it empty to preserve the original requirement.

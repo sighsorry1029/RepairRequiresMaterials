@@ -12,6 +12,7 @@ namespace RepairRequiresMaterials;
 
 [BepInPlugin(ModGuid, ModName, ModVersion)]
 [BepInDependency(AzuCraftyBoxesCompat.PluginGuid, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(ArtisanMasteryCompat.PluginGuid, BepInDependency.DependencyFlags.SoftDependency)]
 public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
 {
     private readonly struct ConfigSection
@@ -33,7 +34,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
     }
 
     internal const string ModName = "RepairRequiresMaterials";
-    internal const string ModVersion = "1.0.7";
+    internal const string ModVersion = "1.0.8";
     internal const string Author = "sighsorry";
     internal const string ModGuid = $"{Author}.{ModName}";
 
@@ -62,6 +63,8 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
     internal static ConfigEntry<Toggle> AllowEquipmentChangesWhileRunning = null!;
     internal static ConfigEntry<float> BaseMaterialCostPercent = null!;
     internal static ConfigEntry<float> QualityIncrementMaterialCostPercent = null!;
+    internal static ConfigEntry<float> FreeRepairDamageThresholdPercent = null!;
+    internal static ConfigEntry<Toggle> MinimumOneMaterialPerRepair = null!;
     internal static ConfigEntry<string> RepairMaterialBlacklist = null!;
     internal static ConfigEntry<Toggle> EnableCraftingSkillFreeRepairs = null!;
     internal static ConfigEntry<float> CraftingSkillFreeRepairChanceAtLevel0 = null!;
@@ -123,7 +126,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
             new ConfigDescription(
                 "Percent of each quality-1 recipe material amount used for a full repair before the durability bucket multiplier is applied. If a recipe has no crafting material cost, its first upgrade material amount is used as the base amount.",
                 new AcceptableValueRange<float>(0f, 100f)),
-            300);
+            500);
 
         QualityIncrementMaterialCostPercent = config(
             RepairCostsConfig,
@@ -132,6 +135,22 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
             new ConfigDescription(
                 "Percent of each current quality increment, (quality - 1) times the recipe amount per level, used for a full repair before the durability bucket multiplier is applied.",
                 new AcceptableValueRange<float>(0f, 100f)),
+            400);
+
+        FreeRepairDamageThresholdPercent = config(
+            RepairCostsConfig,
+            "Free Repair Damage Threshold Percent",
+            10f,
+            new ConfigDescription(
+                "Damage strictly below this percent has no material cost. At the threshold, normal costs apply to all damage, not just the excess. 0 disables this free band; 100 applies costs only to fully broken items. The existing 10% cost buckets are preserved; allowed damage below 10% uses its exact percentage instead of a zero bucket.",
+                new AcceptableValueRange<float>(0f, 100f)),
+            300);
+
+        MinimumOneMaterialPerRepair = config(
+            RepairCostsConfig,
+            "Minimum One Material Per Repair",
+            Toggle.Off,
+            "If on, each ingredient with a positive repair cost before stochastic rounding requires at least one item. Does not override the free damage band, zero cost percentages, material exclusions, or Crafting-skill free repairs. Recipes requiring only one ingredient still use only the selected ingredient.",
             200);
 
         RepairMaterialBlacklist = config(
@@ -287,6 +306,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
 
         AdminCommands.Register();
         _harmony.PatchAll(Assembly.GetExecutingAssembly());
+        ArtisanMasteryCompat.Initialize(_harmony);
         Config.Save();
         SetupWatcher();
     }

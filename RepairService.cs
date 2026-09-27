@@ -10,17 +10,82 @@ internal static class RepairService
 {
     private static readonly HashSet<Inventory> DirtyInventories = new();
     private static bool _isFlushingStateChanges;
+    private static bool _repairInProgress;
 
     internal static bool TryRepairSelected(Player player)
     {
+        if (_repairInProgress)
+        {
+            return false;
+        }
+
+        _repairInProgress = true;
         try
         {
             return TryRepairSelectedCore(player);
         }
         finally
         {
-            FlushDirtyNotifications();
+            try
+            {
+                FlushDirtyNotifications();
+            }
+            finally
+            {
+                _repairInProgress = false;
+            }
         }
+    }
+
+    // Only the compatibility interaction may grant the ship-anvil station exception.
+    internal static (int Repaired, int Skipped) RepairAllAtGalleonAnvil(Player player)
+    {
+        if ((Object)(object)player == null || player != Player.m_localPlayer || _repairInProgress)
+        {
+            return default;
+        }
+
+        int repaired = 0;
+        int skipped = 0;
+        _repairInProgress = true;
+        try
+        {
+            // Removing materials can change the live inventory while iterating.
+            ItemDrop.ItemData[] items = player.GetInventory().GetAllItems().ToArray();
+            foreach (ItemDrop.ItemData item in items)
+            {
+                if (!RepairCostSystem.CanRepairStructurally(player, item))
+                {
+                    continue;
+                }
+
+                // Re-price after each payment, including nearby container contents.
+                if (RepairCostSystem.TryGetRepairPreview(player, item, out RepairPreview? preview, atGalleonAnvil: true)
+                    && preview != null
+                    && TryRepairItem(player, preview))
+                {
+                    ++repaired;
+                }
+                else
+                {
+                    ++skipped;
+                }
+            }
+        }
+        finally
+        {
+            try
+            {
+                RepairSelectionState.Reset();
+                FlushDirtyNotifications();
+            }
+            finally
+            {
+                _repairInProgress = false;
+            }
+        }
+
+        return (repaired, skipped);
     }
 
     internal static void MarkInventoryDirty(Inventory inventory)
@@ -82,28 +147,14 @@ internal static class RepairService
             return false;
         }
 
-        float maxDurability = currentPreview.Item.GetMaxDurability();
-        if (maxDurability <= 0f)
-        {
-            return false;
-        }
-
-        if (!ConsumeRequirements(player, currentPreview))
+        if (!TryRepairItem(player, currentPreview))
         {
             player.Message(MessageHud.MessageType.Center, "$msg_missingrequirement");
             RepairSelectionState.Refresh(player, force: true);
             return false;
         }
 
-        float repairedFraction = 1f - currentPreview.Item.m_durability / maxDurability;
-        currentPreview.Item.m_durability = maxDurability;
-        RepairCostRoundingSystem.CompleteSuccessfulRepair(player, currentPreview);
-        CraftingFreeRepairSystem.CompleteSuccessfulRepair(player, currentPreview);
         RepairSelectionState.OnItemRepaired(currentPreview.Item);
-
-        RunPostRepairAction(
-            "crafting skill gain",
-            () => player.RaiseSkill(Skills.SkillType.Crafting, repairedFraction));
 
         CraftingStation? station = player.GetCurrentCraftingStation();
         if ((currentPreview.PaymentKind == RepairPaymentKind.StationMaterials
@@ -120,6 +171,30 @@ internal static class RepairService
             () => player.Message(
                 MessageHud.MessageType.Center,
                 Localization.instance.Localize("$msg_repaired", currentPreview.Item.m_shared.m_name)));
+        return true;
+    }
+
+    private static bool TryRepairItem(Player player, RepairPreview preview)
+    {
+        if (!RepairCostSystem.CanRepairStructurally(player, preview.Item))
+        {
+            return false;
+        }
+
+        float maxDurability = preview.Item.GetMaxDurability();
+        if (maxDurability <= 0f || !ConsumeRequirements(player, preview))
+        {
+            return false;
+        }
+
+        float repairedFraction = 1f - preview.Item.m_durability / maxDurability;
+        preview.Item.m_durability = maxDurability;
+        MarkInventoryDirty(player.GetInventory());
+        RepairCostRoundingSystem.CompleteSuccessfulRepair(player, preview);
+        CraftingFreeRepairSystem.CompleteSuccessfulRepair(player, preview);
+        RunPostRepairAction(
+            "crafting skill gain",
+            () => player.RaiseSkill(Skills.SkillType.Crafting, repairedFraction));
         return true;
     }
 

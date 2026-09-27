@@ -5,6 +5,12 @@ rrm_skill_crafting_equip_speed: "대기열에 추가되는 장비 장착 및 수
 
 rrm_ui_free: "무료"
 
+rrm_galleon_action: "재료를 사용해 아이템 수리 (Crafting 무료 수리 적용)"
+rrm_galleon_repaired: "아이템 {0}개를 수리했습니다."
+rrm_galleon_partial: "아이템 {0}개 수리, {1}개 건너뜀 (재료 부족 또는 적합한 레시피 없음)."
+rrm_galleon_nothing: "수리할 아이템이 없습니다."
+rrm_galleon_failed: "수리가 중단되었습니다. 이미 수리된 아이템은 유지됩니다."
+
 rrm_dismantle_unavailable: "아이템 분해를 사용할 수 없습니다."
 rrm_dismantle_action: "대상 아이템 분해"
 rrm_dismantle_success: "아이템 {0}개를 분해했습니다."

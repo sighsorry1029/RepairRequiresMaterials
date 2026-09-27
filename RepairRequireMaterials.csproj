@@ -113,6 +113,7 @@
     </ItemGroup>
     <ItemGroup>
         <Compile Include="AdminCommands.cs"/>
+        <Compile Include="ArtisanMasteryCompat.cs"/>
         <Compile Include="AzuCraftyBoxesCompat.cs"/>
         <Compile Include="CraftingEquipSpeedPatches.cs"/>
         <Compile Include="CraftingFreeRepairSystem.cs"/>
