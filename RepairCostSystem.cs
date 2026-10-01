@@ -149,12 +149,18 @@ internal static class RepairCostSystem
         }
 
         CraftingStation? station = player.GetCurrentCraftingStation();
+        bool atGalleonAnvil = ArtisanMasteryCompat.IsRepairStation(station);
+        if (atGalleonAnvil && !ArtisanMasteryCompat.CanUseStation(player))
+        {
+            return;
+        }
+
         WornItems.Clear();
         player.GetInventory().GetWornItems(WornItems);
 
         foreach (ItemDrop.ItemData item in WornItems)
         {
-            if (CanBuildPaymentPlan(player, item, station))
+            if (CanBuildPaymentPlan(player, item, station, atGalleonAnvil))
             {
                 results.Add(item);
             }
@@ -164,11 +170,19 @@ internal static class RepairCostSystem
     internal static bool TryGetRepairPreview(
         Player player,
         ItemDrop.ItemData item,
-        out RepairPreview? preview,
-        bool atGalleonAnvil = false)
+        out RepairPreview? preview)
     {
         preview = null;
         if (!CanRepairStructurally(player, item))
+        {
+            return false;
+        }
+
+        CraftingStation? station = player.GetCurrentCraftingStation();
+        bool atGalleonAnvil = ArtisanMasteryCompat.IsRepairStation(station);
+        // A stale or unreachable ship station cannot retain a repair exception,
+        // including when the player has enabled the no-cost cheat.
+        if (atGalleonAnvil && !ArtisanMasteryCompat.CanUseStation(player))
         {
             return false;
         }
@@ -184,7 +198,6 @@ internal static class RepairCostSystem
             return true;
         }
 
-        CraftingStation? station = player.GetCurrentCraftingStation();
         if (station == null && !atGalleonAnvil)
         {
             return false;
@@ -281,7 +294,11 @@ internal static class RepairCostSystem
         return validStation && Mathf.Min(station.GetLevel(), 4) >= recipe.m_minStationLevel;
     }
 
-    private static bool CanBuildPaymentPlan(Player player, ItemDrop.ItemData item, CraftingStation? station)
+    private static bool CanBuildPaymentPlan(
+        Player player,
+        ItemDrop.ItemData item,
+        CraftingStation? station,
+        bool atGalleonAnvil)
     {
         if (!CanRepairStructurally(player, item))
         {
@@ -294,8 +311,8 @@ internal static class RepairCostSystem
         }
 
         return station != null
-               && (FindRepairRecipe(player, item, station) != null
-                   || CanUseExternalStationRepair(player, item, station));
+               && (FindRepairRecipe(player, item, station, atGalleonAnvil) != null
+                   || (!atGalleonAnvil && CanUseExternalStationRepair(player, item, station)));
     }
 
     private static bool CanUseExternalStationRepair(
@@ -319,7 +336,7 @@ internal static class RepairCostSystem
         Player player,
         ItemDrop.ItemData item,
         CraftingStation? station,
-        bool atGalleonAnvil = false)
+        bool atGalleonAnvil)
     {
         IReadOnlyList<Recipe> exactRecipes = RepairRecipeCatalog.GetRecipes(item);
         bool hasEnabledExactRecipe = false;

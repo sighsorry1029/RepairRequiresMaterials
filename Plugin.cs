@@ -34,7 +34,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
     }
 
     internal const string ModName = "RepairRequiresMaterials";
-    internal const string ModVersion = "1.0.8";
+    internal const string ModVersion = "1.0.9";
     internal const string Author = "sighsorry";
     internal const string ModGuid = $"{Author}.{ModName}";
 
@@ -69,6 +69,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
     internal static ConfigEntry<Toggle> EnableCraftingSkillFreeRepairs = null!;
     internal static ConfigEntry<float> CraftingSkillFreeRepairChanceAtLevel0 = null!;
     internal static ConfigEntry<float> CraftingSkillFreeRepairChanceAtLevel100 = null!;
+    internal static ConfigEntry<float> GalleonAnvilFreeRepairBonus = null!;
     internal static ConfigEntry<float> CraftingBonusOutputChanceAtLevel100 = null!;
     internal static ConfigEntry<string> CraftingBonusExcludedOutputPrefabs = null!;
     internal static ConfigEntry<float> CraftingEquipTimeReductionAtLevel100 = null!;
@@ -193,6 +194,17 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
                 "Maximum percent chance for a material-cost repair to be free at Crafting skill 100. Lower skill levels interpolate from the configured level-0 minimum.",
                 new AcceptableValueRange<float>(0f, 100f)),
             400);
+
+        GalleonAnvilFreeRepairBonus = config(
+            CraftingSkillEffectsConfig,
+            "Galleon Anvil Free Repair Bonus",
+            15f,
+            new ConfigDescription(
+                "Additional percentage points of free-repair chance at Artisan Mastery's Galleon anvil, capped at 100% total chance. "
+                + "For example, 15 changes a 30% chance to 45%, not 34.5%. Applies when a new repair ticket is decided; existing tickets are not rerolled. "
+                + "0 removes the bonus from new tickets. Enable Free Repairs must be on. The extra free outcome is usable only at an active Galleon anvil.",
+                new AcceptableValueRange<float>(0f, 100f)),
+            350);
 
         CraftingBonusOutputChanceAtLevel100 = config(
             CraftingSkillEffectsConfig,
@@ -328,7 +340,14 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
             {
                 try
                 {
-                    _harmony.UnpatchSelf();
+                    try
+                    {
+                        ArtisanMasteryCompat.CloseStation(hideGui: true);
+                    }
+                    finally
+                    {
+                        _harmony.UnpatchSelf();
+                    }
                 }
                 finally
                 {

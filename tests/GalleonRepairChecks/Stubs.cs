@@ -119,17 +119,10 @@ namespace RepairRequiresMaterials
     }
     internal static class RepairCostSystem
     {
-        internal static Func<Player, ItemDrop.ItemData, bool, RepairPreview?> PreviewBuilder = (_, _, _) => null;
         internal static bool CanRepairStructurally(Player player, ItemDrop.ItemData item) => player != null
             && item != null && player.GetInventory().ContainsItem(item) && item.m_shared.m_useDurability
             && item.m_shared.m_canBeReparied && item.GetMaxDurability() > 0
             && item.m_durability < item.GetMaxDurability();
-        internal static bool TryGetRepairPreview(Player player, ItemDrop.ItemData item,
-            out RepairPreview? preview, bool atGalleonAnvil = false)
-        {
-            preview = PreviewBuilder(player, item, atGalleonAnvil);
-            return preview != null;
-        }
         internal static bool CanAfford(Player player, RepairPreview preview) => preview.Costs.All(
             cost => cost.AvailableAmount >= cost.RequiredAmount);
     }
@@ -137,16 +130,30 @@ namespace RepairRequiresMaterials
     {
         internal static RepairPreview? Displayed;
         internal static RepairPreview? Current;
+        internal static Func<Player, RepairPreview?>? PreviewBuilder;
         internal static int ResetCount;
         internal static int RefreshCount;
         internal static readonly List<ItemDrop.ItemData> Repaired = new();
         internal static bool TryGetDisplayedPreview(Player player, out RepairPreview? preview)
         { preview = Displayed; return preview != null; }
         internal static bool TryGetPreviewForRepair(Player player, out RepairPreview? preview)
-        { preview = Current; return preview != null; }
+        { preview = PreviewBuilder == null ? Current : PreviewBuilder(player); return preview != null; }
         internal static bool Refresh(Player player, bool force = false) { RefreshCount++; return true; }
         internal static void OnItemRepaired(ItemDrop.ItemData item) => Repaired.Add(item);
-        internal static void Reset() { Displayed = null; Current = null; ResetCount++; }
+        internal static void Reset() { Displayed = null; Current = null; PreviewBuilder = null; ResetCount++; }
+    }
+    internal static class ArtisanMasteryCompat
+    {
+        internal static CraftingStation? RepairStation;
+        internal static int EffectCount;
+        internal static bool ThrowEffect;
+        internal static bool IsRepairStation(CraftingStation? station) => station != null
+            && ReferenceEquals(station, RepairStation);
+        internal static void PlayRepairEffect(Player player)
+        {
+            if (ThrowEffect) throw new InvalidOperationException("Simulated effect failure");
+            EffectCount++;
+        }
     }
     internal static class RepairCostRoundingSystem
     {

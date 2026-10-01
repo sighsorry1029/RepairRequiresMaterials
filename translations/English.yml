@@ -5,11 +5,10 @@ rrm_skill_crafting_equip_speed: "Queued equipment equip and manual unequip time 
 
 rrm_ui_free: "FREE"
 
-rrm_galleon_action: "Repair items using materials (Crafting free repairs apply)"
-rrm_galleon_repaired: "Repaired {0} item(s)."
-rrm_galleon_partial: "Repaired {0} item(s); skipped {1} (missing materials or no eligible recipe)."
-rrm_galleon_nothing: "No items need repairing."
-rrm_galleon_failed: "Repair stopped. Items already repaired were kept."
+rrm_galleon_action: "Open equipment repair"
+rrm_galleon_station: "Galleon Anvil — Repair Only"
+rrm_galleon_bonus: "Galleon free repair chance +{0} pp"
+rrm_galleon_failed: "Could not open equipment repair."
 
 rrm_dismantle_unavailable: "Item dismantling is unavailable."
 rrm_dismantle_action: "Dismantle eligible items"

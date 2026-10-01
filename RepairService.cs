@@ -37,57 +37,6 @@ internal static class RepairService
         }
     }
 
-    // Only the compatibility interaction may grant the ship-anvil station exception.
-    internal static (int Repaired, int Skipped) RepairAllAtGalleonAnvil(Player player)
-    {
-        if ((Object)(object)player == null || player != Player.m_localPlayer || _repairInProgress)
-        {
-            return default;
-        }
-
-        int repaired = 0;
-        int skipped = 0;
-        _repairInProgress = true;
-        try
-        {
-            // Removing materials can change the live inventory while iterating.
-            ItemDrop.ItemData[] items = player.GetInventory().GetAllItems().ToArray();
-            foreach (ItemDrop.ItemData item in items)
-            {
-                if (!RepairCostSystem.CanRepairStructurally(player, item))
-                {
-                    continue;
-                }
-
-                // Re-price after each payment, including nearby container contents.
-                if (RepairCostSystem.TryGetRepairPreview(player, item, out RepairPreview? preview, atGalleonAnvil: true)
-                    && preview != null
-                    && TryRepairItem(player, preview))
-                {
-                    ++repaired;
-                }
-                else
-                {
-                    ++skipped;
-                }
-            }
-        }
-        finally
-        {
-            try
-            {
-                RepairSelectionState.Reset();
-                FlushDirtyNotifications();
-            }
-            finally
-            {
-                _repairInProgress = false;
-            }
-        }
-
-        return (repaired, skipped);
-    }
-
     internal static void MarkInventoryDirty(Inventory inventory)
     {
         DirtyInventories.Add(inventory);
@@ -157,7 +106,11 @@ internal static class RepairService
         RepairSelectionState.OnItemRepaired(currentPreview.Item);
 
         CraftingStation? station = player.GetCurrentCraftingStation();
-        if ((currentPreview.PaymentKind == RepairPaymentKind.StationMaterials
+        if (ArtisanMasteryCompat.IsRepairStation(station))
+        {
+            RunPostRepairAction("galleon repair effect", () => ArtisanMasteryCompat.PlayRepairEffect(player));
+        }
+        else if ((currentPreview.PaymentKind == RepairPaymentKind.StationMaterials
                 || currentPreview.PaymentKind == RepairPaymentKind.CraftingSkillFree)
             && station != null)
         {

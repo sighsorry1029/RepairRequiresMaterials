@@ -17,6 +17,7 @@ internal static class CraftingFreeRepairSystem
     {
         None,
         Free,
+        AnvilFree,
         Paid
     }
 
@@ -40,6 +41,7 @@ internal static class CraftingFreeRepairSystem
             char outcome = Outcome switch
             {
                 TicketOutcome.Free => 'F',
+                TicketOutcome.AnvilFree => 'A',
                 TicketOutcome.Paid => 'P',
                 _ => 'N'
             };
@@ -94,14 +96,14 @@ internal static class CraftingFreeRepairSystem
             return stationPreview.WithPayment(RepairPaymentKind.StationMaterials, state.Serialize());
         }
 
-        if (state is { Outcome: TicketOutcome.Free })
+        if (state is { Outcome: TicketOutcome.Free or TicketOutcome.AnvilFree })
         {
             string currentPlan = BuildPlanFingerprint(stationPreview);
             if (!string.Equals(state.PlanFingerprint, currentPlan, StringComparison.Ordinal))
             {
-                // A revealed free result is valid only for the exact cost snapshot
-                // that produced it. Any quality, durability bucket, or material
-                // requirement change permanently locks this repair cycle to Paid.
+                // Both free outcomes belong to the exact cost snapshot that
+                // produced them, including an anvil-only result not yet used at
+                // an anvil. Cost changes permanently lock this cycle to Paid.
                 state.Outcome = TicketOutcome.Paid;
                 if (!WriteState(item, inventory, state))
                 {
@@ -111,10 +113,7 @@ internal static class CraftingFreeRepairSystem
                 return stationPreview.WithPayment(RepairPaymentKind.StationMaterials, state.Serialize());
             }
 
-            RepairPaymentKind paymentKind = IsFeatureEnabled()
-                ? RepairPaymentKind.CraftingSkillFree
-                : RepairPaymentKind.StationMaterials;
-            return stationPreview.WithPayment(paymentKind, state.Serialize());
+            return stationPreview.WithPayment(GetPaymentKind(player, state), state.Serialize());
         }
 
         if (!hasMaterialCost || !IsFeatureEnabled())
@@ -128,9 +127,15 @@ internal static class CraftingFreeRepairSystem
             RepairRequiresMaterialsPlugin.CraftingSkillFreeRepairChanceAtLevel0.Value,
             RepairRequiresMaterialsPlugin.CraftingSkillFreeRepairChanceAtLevel100.Value);
 
-        state.Outcome = GetDeterministicRoll(state.ItemId, state.Cycle) < chance
+        double anvilChance = Math.Min(1d,
+            chance + NormalizePercent(RepairRequiresMaterialsPlugin.GalleonAnvilFreeRepairBonus.Value) / 100d);
+        double roll = GetDeterministicRoll(state.ItemId, state.Cycle);
+        // Resolve both thresholds once, regardless of the current station. This
+        // preserves the skill/config snapshot without carrying anvil-only free
+        // repairs to ordinary stations or rerolling when changing stations.
+        state.Outcome = roll < chance
             ? TicketOutcome.Free
-            : TicketOutcome.Paid;
+            : roll < anvilChance ? TicketOutcome.AnvilFree : TicketOutcome.Paid;
         state.PlanFingerprint = BuildPlanFingerprint(stationPreview);
         if (!WriteState(item, inventory, state))
         {
@@ -138,11 +143,16 @@ internal static class CraftingFreeRepairSystem
             return stationPreview;
         }
 
-        return stationPreview.WithPayment(
-            state.Outcome == TicketOutcome.Free
-                ? RepairPaymentKind.CraftingSkillFree
-                : RepairPaymentKind.StationMaterials,
-            state.Serialize());
+        return stationPreview.WithPayment(GetPaymentKind(player, state), state.Serialize());
+    }
+
+    private static RepairPaymentKind GetPaymentKind(Player player, TicketState state)
+    {
+        return IsFeatureEnabled()
+            && (state.Outcome == TicketOutcome.Free
+                || state.Outcome == TicketOutcome.AnvilFree && ArtisanMasteryCompat.CanUseStation(player))
+            ? RepairPaymentKind.CraftingSkillFree
+            : RepairPaymentKind.StationMaterials;
     }
 
     internal static void CompleteSuccessfulRepair(Player player, RepairPreview preview)
@@ -285,6 +295,7 @@ internal static class CraftingFreeRepairSystem
         TicketOutcome outcome = parts[3][0] switch
         {
             'F' => TicketOutcome.Free,
+            'A' => TicketOutcome.AnvilFree,
             'P' => TicketOutcome.Paid,
             'N' => TicketOutcome.None,
             _ => (TicketOutcome)(-1)

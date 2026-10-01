@@ -3,6 +3,7 @@ namespace UnityEngine
 {
     public class Object { public string name = ""; }
     public class GameObject : Object { }
+    public static class Time { public static float unscaledTime; }
     public static class Mathf
     {
         public static int Min(int left, int right) => Math.Min(left, right);
@@ -107,6 +108,15 @@ public class InventoryGui : UnityEngine.Object
 
 namespace RepairRequiresMaterials
 {
+    internal static class ArtisanMasteryCompat
+    {
+        internal static CraftingStation? RepairStation;
+        internal static bool Usable = true;
+        internal static bool IsRepairStation(CraftingStation? station) => station != null
+            && ReferenceEquals(station, RepairStation);
+        internal static bool CanUseStation(Player player) => Usable && IsRepairStation(player.Station);
+    }
+
     internal enum Toggle { Off, On }
     internal static class ToggleExtensions
     {
@@ -126,6 +136,7 @@ namespace RepairRequiresMaterials
         internal static readonly Config<Toggle> EnableCraftingSkillFreeRepairs = new(Toggle.Off);
         internal static readonly Config<float> CraftingSkillFreeRepairChanceAtLevel0 = new(10f);
         internal static readonly Config<float> CraftingSkillFreeRepairChanceAtLevel100 = new(30f);
+        internal static readonly Config<float> GalleonAnvilFreeRepairBonus = new(15f);
         internal static readonly Logger Log = new();
     }
     internal sealed class Logger

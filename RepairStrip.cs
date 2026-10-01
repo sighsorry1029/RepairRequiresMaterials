@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -69,6 +70,9 @@ internal static class RepairStripController
     private static RectTransform? _materialsTransform;
     private static GameObject? _skillFreeRoot;
     private static TMP_Text? _skillFreeText;
+    private static TMP_Text? _anvilBonusText;
+    private static float _lastAnvilBonus = float.NaN;
+    private static string? _lastAnvilBonusLanguage;
     private static Image? _itemIcon;
     private static TMP_Text? _itemQuality;
     private static GuiBar? _itemDurability;
@@ -89,7 +93,13 @@ internal static class RepairStripController
 
         if (!RepairSelectionState.TryGetSelectedPreview(player, out RepairPreview? preview) || preview == null)
         {
-            Hide();
+            Hide(hideAnvilBonus: false);
+            // The facility bonus is still useful information with no damaged equipment.
+            if (ArtisanMasteryCompat.CanUseStation(player))
+            {
+                EnsureCreated(gui);
+            }
+            RefreshAnvilBonus(player);
             return;
         }
 
@@ -99,6 +109,7 @@ internal static class RepairStripController
             return;
         }
 
+        RefreshAnvilBonus(player);
         RefreshWheelSprite();
         if (preview.PaymentKind == RepairPaymentKind.CraftingSkillFree && _skillFreeText != null)
         {
@@ -123,13 +134,17 @@ internal static class RepairStripController
         }
     }
 
-    internal static void Hide()
+    internal static void Hide(bool hideAnvilBonus = true)
     {
         RepairSelectionState.ClearDisplayedPreview();
         _lastVisualKey = int.MinValue;
         if (_root != null)
         {
             _root.SetActive(false);
+        }
+        if (hideAnvilBonus && _anvilBonusText != null)
+        {
+            _anvilBonusText.gameObject.SetActive(false);
         }
     }
 
@@ -144,6 +159,10 @@ internal static class RepairStripController
         {
             Object.Destroy(_root);
         }
+        if (_anvilBonusText != null)
+        {
+            Object.Destroy(_anvilBonusText.gameObject);
+        }
 
         _owner = null;
         _root = null;
@@ -151,6 +170,9 @@ internal static class RepairStripController
         _materialsTransform = null;
         _skillFreeRoot = null;
         _skillFreeText = null;
+        _anvilBonusText = null;
+        _lastAnvilBonus = float.NaN;
+        _lastAnvilBonusLanguage = null;
         _itemIcon = null;
         _itemQuality = null;
         _itemDurability = null;
@@ -218,6 +240,7 @@ internal static class RepairStripController
             CreateSkillFreeLabel(gui);
             CreateItemSlot(gui);
             CreateWheelHint();
+            CreateAnvilBonusLabel(gui);
 
             _scrollHandler = gui.m_repairButton.GetComponent<RepairScrollHandler>()
                 ?? gui.m_repairButton.gameObject.AddComponent<RepairScrollHandler>();
@@ -231,6 +254,58 @@ internal static class RepairStripController
             RepairRequiresMaterialsPlugin.Log.LogWarning(
                 $"Could not create the compact repair strip: {exception.GetType().Name}: {exception.Message}");
             Destroy();
+        }
+    }
+
+    private static void CreateAnvilBonusLabel(InventoryGui gui)
+    {
+        TMP_Text? template = FindInventoryTextTemplate(gui, "amount")
+            ?? FindRequirementAmountTemplate(gui);
+        // A sibling of the icon strip, not a layout child: text cannot push icons or the button.
+        _anvilBonusText = CreateOverlayText(template, gui.m_repairButton.transform, "GalleonRepairBonus");
+        _anvilBonusText.alignment = TextAlignmentOptions.BottomRight;
+        _anvilBonusText.enableAutoSizing = true;
+        _anvilBonusText.fontSizeMin = 12f;
+        _anvilBonusText.fontSizeMax = 16f;
+        _anvilBonusText.color = new Color(1f, 0.82f, 0.2f, 1f);
+        _anvilBonusText.text = string.Empty;
+        RectTransform rect = _anvilBonusText.rectTransform;
+        rect.anchorMin = Vector2.one;
+        rect.anchorMax = Vector2.one;
+        rect.pivot = new Vector2(1f, 0f);
+        rect.anchoredPosition = new Vector2(0f, 6f);
+        rect.sizeDelta = new Vector2(380f, 26f);
+        SetLayerRecursively(_anvilBonusText.gameObject, gui.m_repairButton.gameObject.layer);
+        _anvilBonusText.gameObject.SetActive(false);
+    }
+
+    private static void RefreshAnvilBonus(Player player)
+    {
+        if (_anvilBonusText == null)
+        {
+            return;
+        }
+
+        float configured = RepairRequiresMaterialsPlugin.GalleonAnvilFreeRepairBonus.Value;
+        float bonus = float.IsNaN(configured) ? 0f : Mathf.Clamp(configured, 0f, 100f);
+        bool show = bonus > 0f && RepairRequiresMaterialsPlugin.EnableCraftingSkillFreeRepairs.Value.IsOn()
+            && ArtisanMasteryCompat.CanUseStation(player);
+        if (_anvilBonusText.gameObject.activeSelf != show)
+        {
+            _anvilBonusText.gameObject.SetActive(show);
+        }
+        if (!show)
+        {
+            return;
+        }
+
+        string language = Localization.instance?.GetSelectedLanguage() ?? string.Empty;
+        if (_lastAnvilBonus != bonus || !string.Equals(_lastAnvilBonusLanguage, language, StringComparison.Ordinal))
+        {
+            _anvilBonusText.text = RepairRequiresMaterialsLocalization.Localize(
+                "$rrm_galleon_bonus", bonus.ToString("0.##", CultureInfo.InvariantCulture));
+            _lastAnvilBonus = bonus;
+            _lastAnvilBonusLanguage = language;
         }
     }
 

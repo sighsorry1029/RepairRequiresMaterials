@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.9
+
+- Changed Artisan Mastery's Galleon anvil into a repair-only station: choose equipment with the vanilla repair button's scroll controls, see required materials, and repair one item at a time. Crafting and upgrading remain unavailable.
+- Added the server-synchronized `Galleon Anvil Free Repair Bonus` setting, adding 15 percentage points by default and capping the total free-repair chance at 100%. The bonus is shown above the repair controls in English and Korean.
+- Kept free-repair outcomes fixed when switching between ordinary stations and the Galleon anvil. Anvil-only free repairs cannot be used elsewhere, and existing repair tickets are not rerolled.
+
 ## 1.0.8
 
 - Added optional Artisan Mastery compatibility: Galleon anvils now use RRM material costs, Crafting free repairs, and nearby AzuCraftyBoxes materials. Items without enough materials or an eligible recipe are skipped with a repair summary. Ship-hull repairs remain unchanged.

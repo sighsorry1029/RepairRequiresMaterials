@@ -57,6 +57,7 @@ internal static class InventoryGuiUpdateRepairPatch
         try
         {
             RepairStripController.Refresh(__instance);
+            ArtisanMasteryCompat.RefreshRepairFocus(__instance);
         }
         finally
         {
@@ -70,6 +71,7 @@ internal static class InventoryGuiHidePatch
 {
     private static void Postfix()
     {
+        ArtisanMasteryCompat.CloseStation();
         RepairStripController.Hide();
         RepairService.FlushDirtyNotifications();
     }
@@ -80,6 +82,7 @@ internal static class InventoryGuiOnDestroyPatch
 {
     private static void Prefix()
     {
+        ArtisanMasteryCompat.CloseStation();
         RepairStripController.Destroy();
         RepairSelectionState.Reset();
     }

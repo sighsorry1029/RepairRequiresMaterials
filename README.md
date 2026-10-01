@@ -127,6 +127,7 @@ Additional stackable items are scaled by their source stack and recipe output am
 | `3 - Crafting Skill Effects` | `Enable Free Repairs` | `On` | - |
 |  | `Free Repair Chance At Level 0` | `10%` | `0-100%` |
 |  | `Free Repair Chance At Level 100` | `30%` | `0-100%` |
+|  | `Galleon Anvil Free Repair Bonus` | `+15 percentage points` | `0-100` |
 |  | `Bonus Output Chance At Level 100` | `25%` | `0-25%` |
 |  | `Bonus Output Excluded Prefabs` | `Simple_*_Socket, Advanced_*_Socket, Perfect_*_Socket` | - |
 |  | `Equip Time Reduction At Level 100` | `50%` | `0-100%` |
@@ -149,9 +150,15 @@ AzuCraftyBoxes container use and known-recipe dismantling are always enabled whe
 
 ## Artisan Mastery Compatibility
 
-When Artisan Mastery is installed, the Galleon's anvil repairs inventory items using RRM's material costs instead of unconditional free repairs. The installed, active anvil acts as a special repair facility without requiring a crafting station type or level; normal workbench repairs keep their station requirements.
+When Artisan Mastery is installed, use the Galleon's anvil to open a repair-only station. Scroll over the vanilla repair button to choose equipment, see its material icons and available/required amounts, then click to repair one item. Gamepad up/down in the crafting group also changes the selected equipment. Crafting and upgrading are unavailable here.
 
-Each item uses the usual quality and durability costs, material exclusions, stable rounding, Crafting free-repair tickets and experience, and optional AzuCraftyBoxes materials. Items without an eligible material recipe or enough materials are skipped, and a summary shows how many were repaired and skipped. Existing free-repair settings still apply. The anvil's cooldown and effects are retained; ship-hull repair kits and passive hull regeneration are unaffected.
+The installed, active anvil waives crafting station type and level requirements only for repairs; normal workbench requirements are unchanged. Each item uses the usual quality and durability costs, material exclusions, stable rounding, Crafting free-repair tickets and experience, and optional AzuCraftyBoxes materials. Equipment without an eligible material recipe is excluded; missing materials remain visible but disable repair. Existing free-repair settings still apply.
+
+`Galleon Anvil Free Repair Bonus` adds **15 percentage points** by default: a normal 10% chance becomes 25%, and 30% becomes 45%, capped at 100%. The configured bonus appears just above the repair button and equipment/material strip while the anvil screen is open, not in the world hover text. `Enable Free Repairs` must be on; setting the bonus to 0 removes it from new tickets.
+
+Normal and anvil outcomes share one fixed roll per repair cycle. Visiting different stations, reopening the screen, or changing Crafting level cannot reroll it, and anvil-only free repairs do not carry over to ordinary stations. Existing decisions are preserved; changes to the bonus affect newly decided tickets. A changed material-cost plan still locks a free outcome to paid for that cycle.
+
+The screen closes when you leave the anvil's interaction range or the anvil is removed or disabled. The original interaction cooldown applies to opening the screen, and successful individual repairs play the anvil's effects. No recipes are unlocked by opening it. Ship-hull repair kits and passive hull regeneration are unaffected.
 
 ## Admin Command
 
