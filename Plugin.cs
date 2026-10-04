@@ -34,7 +34,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
     }
 
     internal const string ModName = "RepairRequiresMaterials";
-    internal const string ModVersion = "1.0.9";
+    internal const string ModVersion = "1.0.10";
     internal const string Author = "sighsorry";
     internal const string ModGuid = $"{Author}.{ModName}";
 
@@ -319,6 +319,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
         AdminCommands.Register();
         _harmony.PatchAll(Assembly.GetExecutingAssembly());
         ArtisanMasteryCompat.Initialize(_harmony);
+        ArtisanStorageCompat.Initialize(_harmony);
         Config.Save();
         SetupWatcher();
     }
@@ -346,6 +347,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
                     }
                     finally
                     {
+                        ArtisanStorageCompat.Shutdown();
                         _harmony.UnpatchSelf();
                     }
                 }

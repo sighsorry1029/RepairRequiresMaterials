@@ -160,6 +160,10 @@ Normal and anvil outcomes share one fixed roll per repair cycle. Visiting differ
 
 The screen closes when you leave the anvil's interaction range or the anvil is removed or disabled. The original interaction cooldown applies to opening the screen, and successful individual repairs play the anvil's effects. No recipes are unlocked by opening it. Ship-hull repair kits and passive hull regeneration are unaffected.
 
+For Artisan Mastery **1.0.5 and 1.0.6**, RRM also guards the six additional Galleon storage compartments. Ship following no longer takes ownership of a compartment another player is using. When the ship is destroyed, RRM verifies the saved inventory and cargo-crate contents before deleting the original storage. Main cargo and AzuCraftyBoxes container discovery are unchanged.
+
+Install the same RRM build on the server and all clients. If ownership, item data, or a transfer cannot be verified, storage data is retained and the compartment/ZDO ID is logged for administrator inspection. Interrupted transfers are quarantined instead of retried automatically; retained storage may not be accessible after the ship is gone. This does not restore previously lost items or guarantee recovery after a process crash. Other Artisan versions skip these storage hooks with a warning.
+
 ## Admin Command
 
 ```text

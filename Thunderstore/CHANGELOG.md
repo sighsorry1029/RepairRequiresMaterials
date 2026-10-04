@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.10
+
+- Added optional protection for Artisan Mastery 1.0.5 and 1.0.6 Galleon storage compartments. Ship movement no longer takes ownership of compartments another player is using.
+- Verify saved contents and cargo-crate transfers before removing storage when a Galleon is destroyed. Unverified transfers retain storage data, keep recovery backups when needed, and log compartment IDs for administrator inspection instead of deleting contents or automatically retrying an interrupted transfer.
+- Kept the main cargo hold, anvil repair rules, and AzuCraftyBoxes container discovery unchanged. Storage protection requires the same RRM build on the server and clients; unreviewed Artisan versions skip these storage hooks with a warning.
+
 ## 1.0.9
 
 - Changed Artisan Mastery's Galleon anvil into a repair-only station: choose equipment with the vanilla repair button's scroll controls, see required materials, and repair one item at a time. Crafting and upgrading remain unavailable.
