@@ -128,12 +128,16 @@ internal static class Program
         Require(true, "Production ResolveContract hook exists");
         resolve.Invoke(null, new object[] { artisan });
         Require(true, "Production ResolveContract accepts this original Artisan DLL");
-        AssemblyBuilder unsupported = AppDomain.CurrentDomain.DefineDynamicAssembly(
-            new AssemblyName("UnsupportedArtisanContract") { Version = new Version(99, 0, 0, 0) }, AssemblyBuilderAccess.Run);
+        // Forward the real types, but make any version-metadata query fail. This
+        // tests version independence without modifying or relabelling input DLLs.
+        resolve.Invoke(null, new object[] { new VersionUnreadableAssembly(artisan) });
+        Require(true, "Production ResolveContract accepts the original structure without reading version metadata");
+        AssemblyBuilder missingContract = AppDomain.CurrentDomain.DefineDynamicAssembly(
+            new AssemblyName("MissingArtisanContract") { Version = new Version(99, 0, 0, 0) }, AssemblyBuilderAccess.Run);
         bool rejected = false;
-        try { resolve.Invoke(null, new object[] { unsupported }); }
-        catch (TargetInvocationException error) when (error.InnerException is NotSupportedException) { rejected = true; }
-        Require(rejected, "Production ResolveContract rejects an unreviewed version");
+        try { resolve.Invoke(null, new object[] { missingContract }); }
+        catch (TargetInvocationException error) when (error.InnerException is TypeLoadException) { rejected = true; }
+        Require(rejected, "Production ResolveContract rejects missing required types regardless of version");
         // Re-resolve after the negative case so it cannot contaminate later checks.
         resolve.Invoke(null, new object[] { artisan });
         foreach (var pair in new[] {
@@ -159,6 +163,19 @@ internal static class Program
         Require(!(bool)bytes.Invoke(null, new object?[] { null, new byte[] { 1 } })!, "BytesEqual rejects missing persisted bytes");
         Require((bool)bytes.Invoke(null, new object?[] { null, null })!, "BytesEqual treats two absent byte arrays as equal");
         Require((bool)bytes.Invoke(null, new object?[] { Array.Empty<byte>(), new byte[0] })!, "BytesEqual accepts empty arrays");
+    }
+
+    private sealed class VersionUnreadableAssembly : Assembly
+    {
+        private readonly Assembly _original;
+
+        internal VersionUnreadableAssembly(Assembly original) => _original = original;
+
+        public override Type GetType(string name, bool throwOnError) => _original.GetType(name, throwOnError)!;
+
+        public override AssemblyName GetName() => throw new InvalidOperationException("Version metadata must not be queried.");
+
+        public override AssemblyName GetName(bool copiedName) => throw new InvalidOperationException("Version metadata must not be queried.");
     }
 
     private static void Require(bool condition, string label)

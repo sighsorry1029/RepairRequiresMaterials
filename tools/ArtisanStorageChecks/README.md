@@ -21,12 +21,16 @@ the original API and Harmony boxing contract.
 Checks cover original access modifiers, the private Artisan cleanup signature,
 Harmony wrapper generation against the real target, actual boxing of the original
 internal `StorageDef` into an `object def` prefix, production `ResolveContract`,
-all five production prefix wrappers, rejection of an unsupported version, and
+all five production prefix wrappers, acceptance without reading version metadata,
+rejection of missing required types regardless of version, and
 `BytesEqual` cases. Public/private access checks include the newly used inventory
 callback and container template fields.
 The boxing call uses a safe managed sentinel with the exact original argument
 type; original Artisan/Unity component methods are never invoked. Production
 prefixes are patched only to test wrapper generation, not executed.
+The version-independence check forwards types from the supplied original Artisan
+assembly through a test-only wrapper that throws if version metadata is queried.
+It does not modify the input DLL or simulate a future Artisan implementation.
 
 Mono may print an unresolved `UnityEngine.Time::get_time` internal-call warning
 while JIT-compiling a wrapper. This host deliberately does not register Unity's

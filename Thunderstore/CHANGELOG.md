@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0
+
+- Removed the Artisan Mastery version-number restriction from Galleon storage protection. RRM now attempts to apply the hooks on any version with the required classes, methods, and fields; incompatible structures still produce a warning and skip the storage hooks.
+- Kept storage ownership checks, inventory verification, recovery backups, and interrupted-transfer safeguards unchanged. This does not guarantee compatibility with behavior changes in future Artisan updates.
+
 ## 1.0.10
 
 - Added optional protection for Artisan Mastery 1.0.5 and 1.0.6 Galleon storage compartments. Ship movement no longer takes ownership of compartments another player is using.

@@ -52,12 +52,9 @@ internal static class ArtisanStorageCompat
         }
     }
 
-    // Kept independently callable for checks against both original optional-mod DLLs.
+    // Validate the required structure without restricting Artisan's version number.
     internal static void ResolveContract(Assembly assembly)
     {
-        System.Version? version = assembly.GetName().Version;
-        if (version != new System.Version(1, 0, 5, 0) && version != new System.Version(1, 0, 6, 0))
-            throw new NotSupportedException($"Unreviewed Artisan version {version}");
         Type root = assembly.GetType("Artisan_Mastery.ShipHiddenContainerRoot", true)!;
         Type def = assembly.GetType("Artisan_Mastery.ShipHiddenContainerSystem+StorageDef", true)!;
         if (!typeof(Component).IsAssignableFrom(root) || !def.IsValueType)
