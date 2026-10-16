@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -163,6 +164,173 @@ internal static class Program
         Require(!(bool)bytes.Invoke(null, new object?[] { null, new byte[] { 1 } })!, "BytesEqual rejects missing persisted bytes");
         Require((bool)bytes.Invoke(null, new object?[] { null, null })!, "BytesEqual treats two absent byte arrays as equal");
         Require((bool)bytes.Invoke(null, new object?[] { Array.Empty<byte>(), new byte[0] })!, "BytesEqual accepts empty arrays");
+        CheckInventoryRoundTrip(compat);
+    }
+
+    private static void CheckInventoryRoundTrip(Type compat)
+    {
+        MethodInfo method = compat.GetMethod("IsSupportedInventoryRoundTrip", Any, null,
+            new[] { typeof(byte[]), typeof(byte[]) }, null)
+            ?? throw new MissingMethodException(compat.FullName, "IsSupportedInventoryRoundTrip");
+        Require(true, "Production inventory round-trip policy exists");
+        bool Accept(byte[] original, byte[] serialized) => (bool)method.Invoke(null, new object[] { original, serialized })!;
+
+        InventoryFixture empty = MakeInventoryFixture(109, Array.Empty<byte>());
+        Require(Accept(empty.Bytes, ConvertFixture(empty)), "Empty 109 inventory migrates to 110");
+        InventoryFixture source = MakeInventoryFixture(109, new byte[] { 1, 0, 1 });
+        byte[] expected = ConvertFixture(source);
+        byte[] originalSnapshot = (byte[])source.Bytes.Clone();
+        byte[] expectedSnapshot = (byte[])expected.Clone();
+        Require(Accept(source.Bytes, expected), "Multiple 109 items allow only header and old cheated-flag conversion");
+        Require(source.Bytes.SequenceEqual(originalSnapshot) && expected.SequenceEqual(expectedSnapshot),
+            "Round-trip policy leaves both source and serialized buffers unchanged");
+        MethodInfo bytesEqual = compat.GetMethod("BytesEqual", Any)!;
+        bool Same(byte[] first, byte[] second) => (bool)bytesEqual.Invoke(null, new object[] { first, second })!;
+        Require(!Same(source.Bytes, expected), "Old source bytes differ from the equivalent current-format live snapshot");
+        Require(Same(expected, (byte[])expected.Clone()), "Validated current-format snapshot matches equivalent live serialization");
+        byte[] changedLive = (byte[])expected.Clone();
+        changedLive[source.FieldOffsets["item 0 stack"]] ^= 1;
+        Require(!Same(expected, changedLive), "Validated current-format snapshot still rejects stale or changed live contents");
+        Require(Accept(source.Bytes, (byte[])source.Bytes.Clone()), "Unchanged 109 bytes remain accepted");
+        InventoryFixture current = MakeInventoryFixture(110, new byte[] { 1, 0, 1 });
+        Require(Accept(current.Bytes, (byte[])current.Bytes.Clone()), "Current 110 bytes preserve cheated flags");
+        byte[] erased = (byte[])current.Bytes.Clone();
+        erased[current.CheatedOffsets[0]] = 0;
+        Require(!Accept(current.Bytes, erased), "Current 110 cheated flag cannot be erased");
+        byte[] added = (byte[])current.Bytes.Clone();
+        added[current.CheatedOffsets[1]] = 1;
+        Require(!Accept(current.Bytes, added), "Current 110 cheated flag cannot be added");
+
+        foreach (var field in source.FieldOffsets)
+        {
+            byte[] changed = (byte[])expected.Clone();
+            changed[field.Value] ^= 1;
+            Require(!Accept(source.Bytes, changed), "Migration rejects changed " + field.Key);
+        }
+        byte[] reordered = (byte[])expected.Clone();
+        // Equal-length records 0 and 2 have different hashes and item data.
+        int firstLength = source.RecordOffsets[1] - source.RecordOffsets[0];
+        Array.Copy(expected, source.RecordOffsets[2], reordered, source.RecordOffsets[0], firstLength);
+        Array.Copy(expected, source.RecordOffsets[0], reordered, source.RecordOffsets[2], firstLength);
+        Require(!Accept(source.Bytes, reordered), "Migration rejects reordered inventory records");
+        byte[] stillCheated = (byte[])expected.Clone();
+        stillCheated[source.CheatedOffsets[0]] = 1;
+        Require(!Accept(source.Bytes, stillCheated), "109 to 110 must follow native clearing of the old cheated flag");
+        foreach (byte flags in new byte[] { 2, 128, 255 })
+        {
+            byte[] unknown = (byte[])source.Bytes.Clone();
+            unknown[source.CheatedOffsets[0]] = flags;
+            Require(!Accept(unknown, expected), "Migration rejects unknown old cheated bits " + flags);
+        }
+        foreach (int version in new[] { 108, 111, 999 })
+        {
+            byte[] unsupported = (byte[])source.Bytes.Clone();
+            Array.Copy(BitConverter.GetBytes(version), unsupported, 4);
+            Require(!Accept(unsupported, expected), "Migration rejects unsupported source format " + version);
+        }
+        byte[] future = (byte[])expected.Clone();
+        Array.Copy(BitConverter.GetBytes(111), future, 4);
+        Require(!Accept(source.Bytes, future), "Migration rejects unknown destination format");
+        Require(!Accept(expected, source.Bytes), "Migration never downgrades 110 to 109");
+        Require(!Accept(source.Bytes, expected.Take(expected.Length - 1).ToArray()), "Migration rejects different payload lengths");
+        bool truncationsRejected = true;
+        for (int length = 1; length < source.Bytes.Length; ++length)
+            truncationsRejected &= !Accept(source.Bytes.Take(length).ToArray(), expected.Take(length).ToArray());
+        Require(truncationsRejected, "Every nonempty truncated fixture prefix fails closed without escaping an exception");
+        Require(!Accept(source.Bytes.Concat(new byte[] { 0 }).ToArray(), expected.Concat(new byte[] { 0 }).ToArray()),
+            "Migration rejects unconsumed trailing bytes");
+        byte[] badCountSource = (byte[])source.Bytes.Clone();
+        byte[] badCountExpected = (byte[])expected.Clone();
+        badCountSource[4] = badCountExpected[4] = 4;
+        Require(!Accept(badCountSource, badCountExpected), "Migration rejects a count larger than available item records");
+        badCountSource[4] = badCountExpected[4] = 2;
+        Require(!Accept(badCountSource, badCountExpected), "Migration rejects a count smaller than available item records");
+        InventoryFixture largeCustom = MakeInventoryFixture(109, new byte[] { 1 }, customCount: 128);
+        Require(Accept(largeCustom.Bytes, ConvertFixture(largeCustom)), "Migration parses two-byte custom-data counts and UTF-8 strings");
+
+        // Exercise the game's actual managed parser as well as the production policy.
+        // No prefabs, ItemData.Save, Inventory.Load or Unity objects are required.
+        Assembly game = AppDomain.CurrentDomain.GetAssemblies().Single(a => a.GetName().Name == "assembly_valheim");
+        Type itemVersion = game.GetType("Version+Item", true)!;
+        if (Enum.IsDefined(itemVersion, 110))
+        {
+            Type package = game.GetType("ZPackage", true)!;
+            Type item = game.GetType("ItemDrop+ItemData", true)!;
+            MethodInfo load = item.GetMethod("Load", Any, null, new[] { package, itemVersion }, null)!;
+            bool ReadCheated(InventoryFixture fixture, int version)
+            {
+                object input = Activator.CreateInstance(package, new object[] { fixture.Bytes })!;
+                package.GetMethod("SetPos", Any)!.Invoke(input, new object[] { 6 });
+                object result = load.Invoke(null, new[] { input, Enum.ToObject(itemVersion, version) })!;
+                object data = result.GetType().GetField("Item2")!.GetValue(result)!;
+                return (bool)item.GetField("m_cheated", Any)!.GetValue(data)!;
+            }
+            Require(!ReadCheated(source, 109), "Original game parser clears cheated for item format 109");
+            Require(ReadCheated(current, 110), "Original game parser preserves cheated for item format 110");
+        }
+        else Console.WriteLine("SKIP: native 110 cheated semantics (this original game predates item format 110).");
+    }
+
+    private sealed class InventoryFixture
+    {
+        internal byte[] Bytes = Array.Empty<byte>();
+        internal readonly List<int> RecordOffsets = new();
+        internal readonly List<int> CheatedOffsets = new();
+        internal readonly Dictionary<string, int> FieldOffsets = new();
+    }
+
+    private static InventoryFixture MakeInventoryFixture(int version, byte[] cheated, int customCount = 2)
+    {
+        var fixture = new InventoryFixture();
+        using var stream = new MemoryStream();
+        using var writer = new BinaryWriter(stream);
+        writer.Write(version);
+        writer.Write((ushort)cheated.Length);
+        for (int i = 0; i < cheated.Length; ++i)
+        {
+            fixture.RecordOffsets.Add((int)stream.Position);
+            void Mark(string field) => fixture.FieldOffsets.Add("item " + i + " " + field, (int)stream.Position);
+            bool optional = i % 2 == 0;
+            Mark("durability"); writer.Write(12345 + i);
+            Mark("grid x"); writer.Write((byte)i);
+            Mark("grid y"); writer.Write((byte)2);
+            Mark("world level"); writer.Write((byte)1);
+            Mark("item flags"); writer.Write(optional ? (byte)255 : (byte)64);
+            if (optional)
+            {
+                Mark("quality"); writer.Write((ushort)(3 + i));
+                Mark("stack"); writer.Write((ushort)(17 + i));
+                Mark("variant"); writer.Write(2 + i);
+                Mark("crafter ID"); writer.Write(1234567890123L + i);
+                Mark("crafter name"); writer.Write("장인-" + i);
+            }
+            Mark("prefab hash"); writer.Write(unchecked((int)0x89ABCDEF) + i);
+            if (optional)
+            {
+                if (customCount < 128) writer.Write((byte)customCount);
+                else { writer.Write((byte)((customCount >> 8) | 128)); writer.Write((byte)customCount); }
+                for (int j = 0; j < customCount; ++j)
+                {
+                    if (j == 0) Mark("custom-data key");
+                    writer.Write("socket-key-" + j);
+                    if (j == 0) Mark("custom-data value");
+                    writer.Write("보석-value-" + i + "-" + j);
+                }
+            }
+            fixture.CheatedOffsets.Add((int)stream.Position);
+            writer.Write(cheated[i]);
+        }
+        writer.Flush();
+        fixture.Bytes = stream.ToArray();
+        return fixture;
+    }
+
+    private static byte[] ConvertFixture(InventoryFixture fixture)
+    {
+        byte[] result = (byte[])fixture.Bytes.Clone();
+        Array.Copy(BitConverter.GetBytes(110), result, 4);
+        foreach (int offset in fixture.CheatedOffsets) result[offset] = 0;
+        return result;
     }
 
     private sealed class VersionUnreadableAssembly : Assembly

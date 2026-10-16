@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using BepInEx.Bootstrap;
 using HarmonyLib;
@@ -232,6 +233,7 @@ internal static class ArtisanStorageCompat
         if (!Recovering.Add(source.m_uid)) return false;
         var crates = new List<Container>();
         byte[]? original = null;
+        byte[]? validatedSource = null;
         bool started = false, committed = false;
         try
         {
@@ -246,12 +248,14 @@ internal static class ArtisanStorageCompat
             if (original != null)
             {
                 stagedSource.Load(new ZPackage(original));
-                // Load can silently skip unknown prefabs/clamp stacks. Refuse lossy decoding.
-                if (!BytesEqual(original, Serialize(stagedSource)))
-                    throw new InvalidOperationException("saved inventory did not round-trip exactly (missing/changed item or data format)");
             }
+            validatedSource = Serialize(stagedSource);
+            // Load can silently skip unknown prefabs/clamp stacks. Permit only the known
+            // native format transition; keep the untouched bytes for backup/concurrency checks.
+            if (original != null && !IsSupportedInventoryRoundTrip(original, validatedSource))
+                throw new InvalidOperationException("saved inventory lost data or used an unsupported format transition");
             if (live != null && live.GetInventory().NrOfItems() > 0
-                && !BytesEqual(original, Serialize(live.GetInventory())))
+                && !BytesEqual(validatedSource, Serialize(live.GetInventory())))
                 throw new InvalidOperationException("live inventory differs from saved inventory");
             if (stagedSource.NrOfItems() == 0)
             {
@@ -321,10 +325,13 @@ internal static class ArtisanStorageCompat
                         WriteInventory(crate, Serialize(empty));
                     }
                     if (!source.IsOwner() || IsBusy(source)) throw new InvalidOperationException("rollback source ownership changed");
+                    if (validatedSource == null) throw new InvalidOperationException("rollback snapshot unavailable");
                     Container? live = LoadedContainer(source);
-                    if (live != null && original != null) WriteInventory(live, original);
-                    else if (original != null) source.Set(ZDOVars.s_items, original);
-                    if (!BytesEqual(original, source.GetByteArray(ZDOVars.s_items)))
+                    // Loading the old bytes again would reapply the native format transition
+                    // and fail WriteInventory's exact readback. Restore the validated snapshot.
+                    if (live != null) WriteInventory(live, validatedSource);
+                    else source.Set(ZDOVars.s_items, validatedSource);
+                    if (!BytesEqual(validatedSource, source.GetByteArray(ZDOVars.s_items)))
                         throw new InvalidOperationException("rollback source verification failed");
                     foreach (Container crate in crates) crate.GetComponent<ZNetView>().Destroy();
                     source.Set(PendingKey, false);
@@ -395,6 +402,36 @@ internal static class ArtisanStorageCompat
         var package = new ZPackage();
         inventory.Save(package);
         return package.GetArray();
+    }
+
+    private static bool IsSupportedInventoryRoundTrip(byte[] original, byte[] serialized)
+    {
+        if (BytesEqual(original, serialized)) return true;
+        if (original.Length != serialized.Length || original.Length < 6) return false;
+        try
+        {
+            var input = new ZPackage(original);
+            if (input.ReadInt() != 109 || new ZPackage(serialized).ReadInt() != 110) return false;
+            byte[] expected = (byte[])original.Clone();
+            Array.Copy(serialized, expected, 4);
+            int count = input.ReadUShort();
+            for (int i = 0; i < count; ++i)
+            {
+                // Use the native item parser to locate each record, not a second copy of
+                // its optional-field layout. This does not instantiate or look up prefabs.
+                ItemDrop.ItemData.Load(input, (global::Version.Item)109);
+                int flagsOffset = input.GetPos() - 1;
+                // 1.0.20 consumes but ignores the old cheated flag when loading format 109.
+                // No other item bytes may change, including flags unknown to this transition.
+                if ((original[flagsOffset] & ~1) != 0) return false;
+                expected[flagsOffset] = 0;
+            }
+            return input.GetPos() == input.Size() && BytesEqual(expected, serialized);
+        }
+        catch (Exception exception) when (exception is IOException || exception is ArgumentException || exception is OverflowException)
+        {
+            return false;
+        }
     }
 
     private static bool BytesEqual(byte[]? first, byte[]? second)

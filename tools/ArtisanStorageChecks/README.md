@@ -23,7 +23,13 @@ Harmony wrapper generation against the real target, actual boxing of the origina
 internal `StorageDef` into an `object def` prefix, production `ResolveContract`,
 all five production prefix wrappers, acceptance without reading version metadata,
 rejection of missing required types regardless of version, and
-`BytesEqual` cases. Public/private access checks include the newly used inventory
+`BytesEqual` cases. Production round-trip policy checks use manually encoded
+inventory fixtures and the original game's managed item parser: unchanged data,
+the exact 109-to-110 header/old-cheated-flag conversion, optional item fields,
+UTF-8 custom data, unknown flags/versions, truncation and trailing-data rejection,
+and preservation of current-format cheated flags. These checks neither instantiate
+prefabs nor execute `Inventory.Load`, real container saves, or rollback.
+Public/private access checks include the newly used inventory
 callback and container template fields.
 The boxing call uses a safe managed sentinel with the exact original argument
 type; original Artisan/Unity component methods are never invoked. Production
@@ -57,6 +63,11 @@ quality, variant, crafter and custom data across the source and all cargo crates
   scene reload (also covering hidden storage without a loaded scene instance),
   destroy the ship. Check combined source/crate contents equal the pre-destruction
   inventory and that repeated cleanup/reload does not produce another copy.
+- Repeat with an untouched format-109 storage saved before the 1.0.20 update,
+  both loaded and unloaded at destruction. Confirm only the game's intended
+  old-cheated-flag reset occurs; count, quality, durability, variant, crafter,
+  custom data and current-format cheated flags must be preserved. Also inject a
+  transfer failure and verify the validated current-format snapshot is restored.
 - In a controlled failure setup, make `CargoCrate_DO` unavailable or trigger an
   inventory round-trip rejection. Verify the log identifies the preserved source
   and that its stored bytes remain unchanged; do not automatically replay a

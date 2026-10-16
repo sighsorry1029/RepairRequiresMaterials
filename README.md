@@ -162,6 +162,8 @@ The screen closes when you leave the anvil's interaction range or the anvil is r
 
 RRM also guards the six additional Galleon storage compartments without restricting the Artisan Mastery version number. The required classes, methods, and fields must still match; incompatible structures skip these storage hooks with a warning. Ship following no longer takes ownership of a compartment another player is using. When the ship is destroyed, RRM verifies the saved inventory and cargo-crate contents before deleting the original storage. Main cargo and AzuCraftyBoxes container discovery are unchanged.
 
+Storage recovery accepts Valheim's native inventory-format update from 109 to 110 without treating that update alone as item loss. Missing items or changes to quantities, quality, custom data, or other item content still stop recovery. The untouched source data remains the backup until the transfer or verified rollback completes.
+
 Install the same RRM build on the server and all clients. If ownership, item data, or a transfer cannot be verified, storage data is retained and the compartment/ZDO ID is logged for administrator inspection. Interrupted transfers are quarantined instead of retried automatically; retained storage may not be accessible after the ship is gone. This does not restore previously lost items or guarantee recovery after a process crash. Matching the required structure does not guarantee compatibility with behavior changes in future Artisan updates.
 
 ## Admin Command

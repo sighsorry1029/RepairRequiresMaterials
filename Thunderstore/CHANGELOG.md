@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1
+
+- Fixed Galleon storage recovery rejecting valid inventories when Valheim 1.0.20 updates their save format from 109 to 110. Missing items and unexpected changes to item data still stop recovery.
+- Fixed failed-transfer rollback to restore the verified current-format inventory while retaining the original backup and existing ownership safeguards until recovery is verified.
+- Added regression checks for save-format conversion and item-data preservation. Anvil repair behavior is unchanged.
+
 ## 1.1.0
 
 - Removed the Artisan Mastery version-number restriction from Galleon storage protection. RRM now attempts to apply the hooks on any version with the required classes, methods, and fields; incompatible structures still produce a warning and skip the storage hooks.
