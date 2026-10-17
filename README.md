@@ -148,6 +148,14 @@ Gameplay settings are synchronized through ServerSync. `Modifier Key` is local t
 
 AzuCraftyBoxes container use and known-recipe dismantling are always enabled when applicable; they have no separate settings.
 
+## Path of Valheiman Compatibility
+
+With Path of Valheiman installed, its Auto Repair node repairs affordable equipment one item at a time when you use a crafting station, skipping items with missing materials. RRM's costs, free-repair tickets, and permitted AzuCraftyBoxes materials still apply. Manual repair selection is unchanged.
+
+PoV's high-level station and staff repair exceptions are respected for the exact recipe PoV approves, while station usability and RRM material requirements remain enforced. If PoV freezes vanilla skill progression, the Crafting tooltip shows the effective level used by RRM, including equipment bonuses. PoV's crafting bonuses, material refunds, salvage, whetstones, and experience rules are left unchanged.
+
+This integration is optional and adds no settings or required dependency. It checks the available methods and repair-loop structure rather than a fixed PoV version; an unsupported hook is skipped with a warning.
+
 ## Artisan Mastery Compatibility
 
 When Artisan Mastery is installed, use the Galleon's anvil to open a repair-only station. Scroll over the vanilla repair button to choose equipment, see its material icons and available/required amounts, then click to repair one item. Gamepad up/down in the crafting group also changes the selected equipment. Crafting and upgrading are unavailable here.

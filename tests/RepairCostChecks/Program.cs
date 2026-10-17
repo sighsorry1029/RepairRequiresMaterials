@@ -175,6 +175,128 @@ var tests = new (string Name, Action Run)[]
         Equal(20, Total(Preview(player, item)));
         Equal(1, Candidates(player).Count);
     }),
+    ("Disabled PoV bridge preserves normal and capped station levels", () =>
+    {
+        var (player, item, recipe) = Setup(20f, Resource("Iron", 100));
+        recipe.m_minStationLevel = 3;
+        player.Station!.Level = 3;
+        Equal(20, Total(Preview(player, item)));
+        Equal(0, PathOfValheimanCompat.Calls.Count);
+        player.Station.Level = 2;
+        False(RepairCostSystem.TryGetRepairPreview(player, item, out _));
+        Equal(1, PathOfValheimanCompat.Calls.Count);
+        player.Station.Level = 8;
+        recipe.m_minStationLevel = 5;
+        False(RepairCostSystem.TryGetRepairPreview(player, item, out _));
+        Equal(0, Candidates(player).Count);
+    }),
+    ("Approved PoV station exception retains actual recipe cost and affordability", () =>
+    {
+        PathOfValheimanCompat.Approved = true;
+        var (player, item, recipe) = Setup(20f, Resource("Iron", 100));
+        recipe.m_minStationLevel = 5;
+        player.Station!.Level = 5;
+        var preview = Preview(player, item);
+        Equal(RepairPaymentKind.StationMaterials, preview.PaymentKind);
+        Equal(20, Total(preview));
+        Equal("Iron", preview.Costs[0].ResourcePrefabName);
+        False(RepairCostSystem.CanAfford(player, preview));
+        True(Candidates(player).SequenceEqual(new[] { item }));
+        True(PathOfValheimanCompat.Calls.All(call => ReferenceEquals(call.Player, player)
+            && ReferenceEquals(call.Item, item) && ReferenceEquals(call.Station, player.Station)
+            && ReferenceEquals(call.Recipe, recipe)));
+        player.Inventory.Counts["Iron"] = 20;
+        True(RepairCostSystem.CanAfford(player, Preview(player, item)));
+    }),
+    ("PoV approval cannot bypass unusable, wrong, missing or unspecified stations", () =>
+    {
+        PathOfValheimanCompat.Approved = true;
+        var (player, item, recipe) = Setup(20f, Resource("Iron", 100));
+        recipe.m_minStationLevel = 5;
+        player.Station!.Level = 5;
+        player.Station.Usable = false;
+        False(RepairCostSystem.TryGetRepairPreview(player, item, out _));
+        Equal(0, Candidates(player).Count);
+        player.Station.Usable = true;
+        player.Station.m_name = "wrong station";
+        False(RepairCostSystem.TryGetRepairPreview(player, item, out _));
+        Equal(0, Candidates(player).Count);
+        player.Station.m_name = "workbench";
+        recipe.m_craftingStation = null!;
+        False(RepairCostSystem.TryGetRepairPreview(player, item, out _));
+        player.Station = null;
+        False(RepairCostSystem.TryGetRepairPreview(player, item, out _));
+        Equal(0, PathOfValheimanCompat.Calls.Count);
+    }),
+    ("PoV hook receives the selected exact recipe rather than ObjectDB shared-name fallback", () =>
+    {
+        var (player, item, recipe) = Setup(20f, Resource("Iron", 100));
+        recipe.m_minStationLevel = 5;
+        player.Station!.Level = 5;
+        var wrongStationRecipe = new Recipe
+        {
+            m_craftingStation = new CraftingStation { m_name = "forge" },
+            m_minStationLevel = 5,
+            m_resources = new[] { Resource("Bronze", 100) }
+        };
+        var sharedNameFallback = new Recipe
+        {
+            m_craftingStation = new CraftingStation(),
+            m_resources = new[] { Resource("Wood", 1) }
+        };
+        ObjectDB.instance = new ObjectDB { Fallback = sharedNameFallback };
+        RepairRecipeCatalog.Recipes[item] = new[] { wrongStationRecipe, recipe };
+        PathOfValheimanCompat.Approval = (_, _, _, selected) => ReferenceEquals(selected, recipe);
+        var preview = Preview(player, item);
+        Equal(20, Total(preview));
+        Equal("Iron", preview.Costs[0].ResourcePrefabName);
+        Equal(1, PathOfValheimanCompat.Calls.Count);
+        Equal(recipe, PathOfValheimanCompat.Calls[0].Recipe);
+    }),
+    ("PoV approval cannot make an excluded-material recipe a free fallback", () =>
+    {
+        PathOfValheimanCompat.Approved = true;
+        var (player, item, recipe) = Setup(20f,
+            Resource("LeatherArmor", 100, ItemType.Chest), Resource("TrophyDeer", 100, ItemType.Trophy));
+        recipe.m_minStationLevel = 5;
+        player.Station!.Level = 5;
+        ObjectDB.instance = new ObjectDB();
+        InventoryGui.instance.ExternalRepairAllowed = true;
+        False(RepairCostSystem.TryGetRepairPreview(player, item, out _));
+        Equal(0, Candidates(player).Count);
+        Equal(0, PathOfValheimanCompat.Calls.Count);
+    }),
+    ("PoV approval alone cannot create a recipe-less or unmatched-recipe free repair", () =>
+    {
+        PathOfValheimanCompat.Approved = true;
+        var (player, item, recipe) = Setup(20f, Resource("Iron", 100));
+        RepairRecipeCatalog.Recipes.Clear();
+        ObjectDB.instance = new ObjectDB();
+        False(RepairCostSystem.TryGetRepairPreview(player, item, out _));
+        Equal(0, Candidates(player).Count);
+        // A known recipe with no exact match must not enter the intentionally
+        // separate recipe-less external repair path, even if another mod approves it.
+        ObjectDB.instance.Fallback = recipe;
+        InventoryGui.instance.ExternalRepairAllowed = true;
+        False(RepairCostSystem.TryGetRepairPreview(player, item, out _));
+        Equal(0, Candidates(player).Count);
+        Equal(0, PathOfValheimanCompat.Calls.Count);
+    }),
+    ("PoV approval cannot make full or unrepairable gear eligible", () =>
+    {
+        PathOfValheimanCompat.Approved = true;
+        var (player, item, recipe) = Setup(20f, Resource("Iron", 100));
+        recipe.m_minStationLevel = 5;
+        player.Station!.Level = 5;
+        item.m_durability = 100f;
+        False(RepairCostSystem.TryGetRepairPreview(player, item, out _));
+        Equal(0, Candidates(player).Count);
+        item.m_durability = 80f;
+        item.m_shared.m_canBeReparied = false;
+        False(RepairCostSystem.TryGetRepairPreview(player, item, out _));
+        Equal(0, Candidates(player).Count);
+        Equal(0, PathOfValheimanCompat.Calls.Count);
+    }),
     ("Minimum and threshold use the same policy at Galleon anvils", () =>
     {
         Plugin.MinimumOneMaterialPerRepair.Value = Toggle.On;
@@ -563,6 +685,9 @@ static void Reset()
     Game.m_worldLevel = 0;
     ArtisanMasteryCompat.RepairStation = null;
     ArtisanMasteryCompat.Usable = true;
+    PathOfValheimanCompat.Approved = false;
+    PathOfValheimanCompat.Approval = null;
+    PathOfValheimanCompat.Calls.Clear();
     UnityEngine.Time.unscaledTime = 0;
     RepairSelectionState.Reset();
 }

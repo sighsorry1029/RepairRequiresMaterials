@@ -291,7 +291,8 @@ internal static class RepairCostSystem
             || (recipe.m_craftingStation != null && recipe.m_craftingStation.m_name == station.m_name)
             || item.m_worldLevel < Game.m_worldLevel;
 
-        return validStation && Mathf.Min(station.GetLevel(), 4) >= recipe.m_minStationLevel;
+        return validStation && (Mathf.Min(station.GetLevel(), 4) >= recipe.m_minStationLevel
+            || PathOfValheimanCompat.AllowsStationRepair(player, item, station, recipe));
     }
 
     private static bool CanBuildPaymentPlan(

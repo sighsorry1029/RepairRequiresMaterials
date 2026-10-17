@@ -1,4 +1,4 @@
-# Selected repair service checks
+# Repair service checks
 
 Run from the repository root:
 
@@ -11,7 +11,12 @@ It checks one-item-per-click behavior, fresh payment availability,
 partial-consumption safety, completed repair notifications, the displayed-preview
 guard, ordinary versus Galleon effects, cosmetic failures, and callback reentrancy.
 Tests exit nonzero on a failure. The folder name is retained to keep the existing
-test command stable after replacing batch repairs with the shared selected flow.
+test command stable.
+
+The PoV automatic-repair pass is also exercised: skip unaffordable/unsupported
+gear, reprice after each payment, retain paid/free completion hooks, reject
+callback reentrancy, stop on station changes, and use a finite inventory snapshot.
+The actual PoV node and Harmony entry point are not loaded by this suite.
 
 `Stubs.cs` supplies deterministic in-memory contracts for the inventory, player,
 selected-preview provider, free/rounding cycle completion, AzuCraftyBoxes result,

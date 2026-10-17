@@ -21,6 +21,12 @@ exercise candidate filtering, shared wheel selection, click-time rejection of an
 expired session, no-cost-cheat rejection in an invalid ship session, and the
 absence of station-exception leakage when switching to a normal station.
 
+PoV boundary checks supply a controlled compatibility verdict (not a copy of
+PoV's policy) and verify that an approved station exception still requires the
+selected recipe's materials. Wrong/unusable stations, excluded ingredients,
+missing recipes, and undamaged/unrepairable items cannot bypass those gates.
+The hook's exact recipe and player/station/item arguments are checked separately.
+
 Anvil free-repair bonus checks exercise the same deterministic roll against the
 base and additive, 100-percent-capped thresholds. They cover both station visit
 orders, anvil-only eligibility, persistence/another player's skill, zero bonus,

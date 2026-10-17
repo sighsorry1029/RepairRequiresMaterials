@@ -13,6 +13,7 @@ namespace RepairRequiresMaterials;
 [BepInPlugin(ModGuid, ModName, ModVersion)]
 [BepInDependency(AzuCraftyBoxesCompat.PluginGuid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency(ArtisanMasteryCompat.PluginGuid, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(PathOfValheimanCompat.PluginGuid, BepInDependency.DependencyFlags.SoftDependency)]
 public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
 {
     private readonly struct ConfigSection
@@ -34,7 +35,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
     }
 
     internal const string ModName = "RepairRequiresMaterials";
-    internal const string ModVersion = "1.1.1";
+    internal const string ModVersion = "1.1.2";
     internal const string Author = "sighsorry";
     internal const string ModGuid = $"{Author}.{ModName}";
 
@@ -320,6 +321,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
         _harmony.PatchAll(Assembly.GetExecutingAssembly());
         ArtisanMasteryCompat.Initialize(_harmony);
         ArtisanStorageCompat.Initialize(_harmony);
+        PathOfValheimanCompat.Initialize(_harmony);
         Config.Save();
         SetupWatcher();
     }
@@ -348,6 +350,7 @@ public sealed class RepairRequiresMaterialsPlugin : BaseUnityPlugin
                     finally
                     {
                         ArtisanStorageCompat.Shutdown();
+                        PathOfValheimanCompat.Shutdown();
                         _harmony.UnpatchSelf();
                     }
                 }

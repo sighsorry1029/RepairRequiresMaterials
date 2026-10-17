@@ -108,6 +108,21 @@ public class InventoryGui : UnityEngine.Object
 
 namespace RepairRequiresMaterials
 {
+    // The bridge's result is controlled here: these checks cover the RRM caller,
+    // not Path of Valheiman's station policy or reflection contract.
+    internal static class PathOfValheimanCompat
+    {
+        internal static bool Approved;
+        internal static Func<Player, ItemDrop.ItemData, CraftingStation, Recipe, bool>? Approval;
+        internal static readonly List<(Player Player, ItemDrop.ItemData Item, CraftingStation Station, Recipe Recipe)> Calls = new();
+
+        internal static bool AllowsStationRepair(Player player, ItemDrop.ItemData item, CraftingStation station, Recipe recipe)
+        {
+            Calls.Add((player, item, station, recipe));
+            return Approval?.Invoke(player, item, station, recipe) ?? Approved;
+        }
+    }
+
     internal static class ArtisanMasteryCompat
     {
         internal static CraftingStation? RepairStation;

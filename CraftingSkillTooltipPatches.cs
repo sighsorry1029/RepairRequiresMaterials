@@ -22,7 +22,8 @@ internal static class CraftingSkillTooltipText
         float freeRepairChanceAtLevel0,
         float freeRepairChanceAtLevel100,
         float bonusOutputChanceAtLevel100,
-        float equipTimeReductionAtLevel100)
+        float equipTimeReductionAtLevel100,
+        float? frozenCraftingLevel = null)
     {
         original ??= string.Empty;
         if (HasRepairRequiresMaterialsHeading(original))
@@ -75,6 +76,13 @@ internal static class CraftingSkillTooltipText
             extra.Append('\n').Append(RepairRequiresMaterialsLocalization.Localize(
                 EquipSpeedToken,
                 FormatPercent(normalizedEquipTimeReduction)));
+        }
+
+        if (frozenCraftingLevel.HasValue)
+        {
+            extra.Append('\n').Append(RepairRequiresMaterialsLocalization.Localize(
+                "$rrm_skill_crafting_pov_frozen",
+                FormatPercent(frozenCraftingLevel.Value)));
         }
 
         return original.Length > 0
@@ -627,7 +635,8 @@ internal static class CraftingSkillTooltipPatch
                 RepairRequiresMaterialsPlugin.CraftingSkillFreeRepairChanceAtLevel0.Value,
                 RepairRequiresMaterialsPlugin.CraftingSkillFreeRepairChanceAtLevel100.Value,
                 RepairRequiresMaterialsPlugin.CraftingBonusOutputChanceAtLevel100.Value,
-                RepairRequiresMaterialsPlugin.CraftingEquipTimeReductionAtLevel100.Value);
+                RepairRequiresMaterialsPlugin.CraftingEquipTimeReductionAtLevel100.Value,
+                PathOfValheimanCompat.GetFrozenCraftingLevel(player));
             if (!string.Equals(text, tooltip.m_text, StringComparison.Ordinal))
             {
                 tooltip.Set(

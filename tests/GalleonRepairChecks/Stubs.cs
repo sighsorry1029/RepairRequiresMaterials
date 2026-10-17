@@ -119,12 +119,24 @@ namespace RepairRequiresMaterials
     }
     internal static class RepairCostSystem
     {
+        internal static Func<Player, ItemDrop.ItemData, RepairPreview?>? PreviewBuilder;
+        internal static void GetRepairableItems(Player player, List<ItemDrop.ItemData> results)
+        {
+            results.Clear();
+            player.Inventory.GetWornItems(results);
+        }
+        internal static bool TryGetRepairPreview(Player player, ItemDrop.ItemData item, out RepairPreview? preview)
+        {
+            preview = CanRepairStructurally(player, item) ? PreviewBuilder?.Invoke(player, item) : null;
+            return preview != null;
+        }
         internal static bool CanRepairStructurally(Player player, ItemDrop.ItemData item) => player != null
             && item != null && player.GetInventory().ContainsItem(item) && item.m_shared.m_useDurability
             && item.m_shared.m_canBeReparied && item.GetMaxDurability() > 0
             && item.m_durability < item.GetMaxDurability();
-        internal static bool CanAfford(Player player, RepairPreview preview) => preview.Costs.All(
-            cost => cost.AvailableAmount >= cost.RequiredAmount);
+        internal static bool CanAfford(Player player, RepairPreview preview) => player.NoCost
+            || preview.PaymentKind == RepairPaymentKind.Free || preview.PaymentKind == RepairPaymentKind.CraftingSkillFree
+            || preview.Costs.All(cost => cost.AvailableAmount >= cost.RequiredAmount);
     }
     internal static class RepairSelectionState
     {

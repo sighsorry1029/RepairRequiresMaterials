@@ -26,14 +26,97 @@ internal static class RepairService
         }
         finally
         {
+            FinishRepairOperation();
+        }
+    }
+
+    internal static int RepairAllAffordable(Player player)
+    {
+        if (_repairInProgress || (Object)(object)player == null
+            || !ReferenceEquals(player, Player.m_localPlayer))
+        {
+            return 0;
+        }
+
+        CraftingStation? station = player.GetCurrentCraftingStation();
+        if (station == null)
+        {
+            return 0;
+        }
+
+        _repairInProgress = true;
+        int repaired = 0;
+        try
+        {
+            // Snapshot once: inventory callbacks must not extend or restart an auto-repair pass.
+            List<ItemDrop.ItemData> candidates = new();
+            RepairCostSystem.GetRepairableItems(player, candidates);
+            HashSet<ItemDrop.ItemData> attempted = new();
+            foreach (ItemDrop.ItemData item in candidates)
+            {
+                if (!HasSameRepairContext(player, station))
+                {
+                    break;
+                }
+
+                if (!attempted.Add(item)
+                    || !RepairCostSystem.TryGetRepairPreview(player, item, out RepairPreview? preview)
+                    || preview == null)
+                {
+                    continue;
+                }
+
+                // Reprice after the previous payment, and recheck callbacks before charging.
+                if (!HasSameRepairContext(player, station))
+                {
+                    break;
+                }
+
+                if (!TryRepairItem(player, preview))
+                {
+                    continue;
+                }
+
+                repaired++;
+                NotifyRepairCompleted(player, preview,
+                    HasSameRepairContext(player, station) ? station : null);
+            }
+
+            return repaired;
+        }
+        finally
+        {
             try
             {
-                FlushDirtyNotifications();
+                if (repaired > 0)
+                {
+                    RunPostRepairAction("repair selection refresh",
+                        () => RepairSelectionState.Refresh(player, force: true));
+                }
             }
             finally
             {
-                _repairInProgress = false;
+                FinishRepairOperation();
             }
+        }
+    }
+
+    private static bool HasSameRepairContext(Player player, CraftingStation station)
+    {
+        return (Object)(object)player != null && station != null
+            && ReferenceEquals(player, Player.m_localPlayer)
+            && ReferenceEquals(player.GetCurrentCraftingStation(), station);
+    }
+
+    private static void FinishRepairOperation()
+    {
+        try
+        {
+            FlushDirtyNotifications();
+        }
+        finally
+        {
+            _repairInProgress = false;
         }
     }
 
@@ -103,15 +186,19 @@ internal static class RepairService
             return false;
         }
 
-        RepairSelectionState.OnItemRepaired(currentPreview.Item);
+        NotifyRepairCompleted(player, currentPreview, player.GetCurrentCraftingStation());
+        return true;
+    }
 
-        CraftingStation? station = player.GetCurrentCraftingStation();
+    private static void NotifyRepairCompleted(Player player, RepairPreview preview, CraftingStation? station)
+    {
+        RepairSelectionState.OnItemRepaired(preview.Item);
         if (ArtisanMasteryCompat.IsRepairStation(station))
         {
             RunPostRepairAction("galleon repair effect", () => ArtisanMasteryCompat.PlayRepairEffect(player));
         }
-        else if ((currentPreview.PaymentKind == RepairPaymentKind.StationMaterials
-                || currentPreview.PaymentKind == RepairPaymentKind.CraftingSkillFree)
+        else if ((preview.PaymentKind == RepairPaymentKind.StationMaterials
+                || preview.PaymentKind == RepairPaymentKind.CraftingSkillFree)
             && station != null)
         {
             RunPostRepairAction(
@@ -123,8 +210,7 @@ internal static class RepairService
             "repair message",
             () => player.Message(
                 MessageHud.MessageType.Center,
-                Localization.instance.Localize("$msg_repaired", currentPreview.Item.m_shared.m_name)));
-        return true;
+                Localization.instance.Localize("$msg_repaired", preview.Item.m_shared.m_name)));
     }
 
     private static bool TryRepairItem(Player player, RepairPreview preview)

@@ -1,4 +1,5 @@
 rrm_skill_crafting_heading: "<color=orange>RepairRequiresMaterials</color>"
+rrm_skill_crafting_pov_frozen: "Path of Valheiman freezes vanilla skill progression. Effective Crafting level: {0}. RRM skill bonuses use this level, including gear bonuses."
 rrm_skill_crafting_free_repair: "Material-cost repairs can be free based on Crafting skill ({0}% at level 0, {1}% at level 100)."
 rrm_skill_crafting_bonus_output: "Each eligible stackable output item at a Crafting-skill station rolls independently, reaching {0}% bonus chance at Crafting skill 100."
 rrm_skill_crafting_equip_speed: "Queued equipment equip and manual unequip time is reduced by Crafting skill (maximum {0}% at level 100)."

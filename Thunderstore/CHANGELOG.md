@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2
+
+- Added optional Path of Valheiman compatibility: Auto Repair uses RRM costs and skips equipment with missing materials instead of stopping the whole batch.
+- Respect PoV's high-level station and staff repair exceptions without bypassing material costs or station usability checks.
+- Show PoV's frozen vanilla skill progression and effective Crafting level in the Crafting tooltip. PoV's crafting, salvage, whetstone, and experience policies remain unchanged.
+
 ## 1.1.1
 
 - Fixed Galleon storage recovery rejecting valid inventories when Valheim 1.0.20 updates their save format from 109 to 110. Missing items and unexpected changes to item data still stop recovery.

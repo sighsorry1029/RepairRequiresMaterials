@@ -128,6 +128,7 @@
         <Compile Include="IncineratorDismantleCostSystem.cs"/>
         <Compile Include="IncineratorDismantlePatches.cs"/>
         <Compile Include="Patches.cs"/>
+        <Compile Include="PathOfValheimanCompat.cs"/>
         <Compile Include="Plugin.cs"/>
         <Compile Include="PrefabPatternMatcher.cs"/>
         <Compile Include="Properties\AssemblyInfo.cs"/>
